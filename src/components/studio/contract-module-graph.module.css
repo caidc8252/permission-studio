@@ -166,3 +166,135 @@
   font-size: 10px;
   font-weight: 700;
 }
+
+@media (max-width: 760px) {
+  .toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .searchField {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .searchStatus {
+    flex: 1;
+    min-width: 9rem;
+    padding-bottom: 0;
+  }
+
+  .toolbarActions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .toolbarActions button {
+    flex: 1;
+  }
+
+  .canvas {
+    height: 34rem;
+    min-height: 28rem;
+  }
+}
+.graphShell {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.searchField {
+  display: grid;
+  min-width: min(22rem, 45%);
+  gap: 5px;
+  color: var(--muted, #64748b);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.searchField input {
+  width: 100%;
+}
+
+.searchStatus {
+  min-width: 11rem;
+  padding-bottom: 10px;
+  color: var(--muted, #64748b);
+  font-size: 0.8rem;
+}
+
+.toolbarActions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 16px;
+  color: var(--muted, #64748b);
+  font-size: 0.76rem;
+}
+
+.legend span::before {
+  display: inline-block;
+  width: 18px;
+  margin-right: 6px;
+  border-top: 2px solid #94a3b8;
+  content: "";
+  vertical-align: middle;
+}
+
+.legend span[data-legend="active"]::before {
+  border-color: var(--accent, #2563eb);
+}
+
+.legend span[data-legend="mixed"]::before {
+  border-color: #d97706;
+}
+
+.legend span[data-legend="inactive"]::before {
+  border-top-style: dashed;
+}
+
+.legend span:last-child::before {
+  display: none;
+}
+
+.canvas {
+  width: 100%;
+  height: min(66vh, 680px);
+  min-height: 480px;
+  overflow: hidden;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.canvas :global(.react-flow__controls),
+.canvas :global(.react-flow__minimap) {
+  overflow: hidden;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 10%);
+}
+
+.canvas :global(.react-flow__controls-button) {
+  border-color: var(--surface-border, #d7e0ec);
+  background: #fff;
+  color: var(--text, #172033);
+}
+
+.canvas :global(.react-flow__node:focus-visible) {
+  outline: 3px solid rgb(37 99 235 / 30%);
+  outline-offset: 4px;
+}
