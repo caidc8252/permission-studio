@@ -2,11 +2,17 @@ import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
-import type { CommandRunner } from "@/src/system/command-runner";
+import {
+  CommandExecutionError,
+  type CommandRunner,
+  type CommandSpec,
+} from "@/src/system/command-runner";
 
 const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
-
+const RETRYABLE_PROXY_FAILURE =
+  /Failed to connect to (?:(?:127\.0\.0\.1|localhost) port \d+.*Connection refused|github\.com port 443.*Timed out)/i;
+const WINDOWS_LONG_PATH_FAILURE = /Filename too long/i;
 export interface RemoteRevision {
   sha: string;
   ref: string;
@@ -31,6 +37,7 @@ export interface RepositoryCacheOptions {
   targetSlug: string;
   baseBranch: string;
   cloneUrl?: string;
+  fallbackProxyUrl?: string;
 }
 
 function assertOwnedPath(root: string, candidate: string): void {
@@ -44,37 +51,91 @@ export function createRepositoryCache(options: RepositoryCacheOptions): Reposito
   const cacheRepoPath = resolve(options.cacheRepoPath);
   const worktreeRoot = resolve(options.worktreeRoot);
   const remoteRef = `refs/remotes/origin/${options.baseBranch}`;
+  const fallbackProxyUrl =
+    options.fallbackProxyUrl ?? process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY ?? "";
+  const fallbackGitProxyEnv = Object.freeze({
+    GIT_CONFIG_COUNT: "2",
+    GIT_CONFIG_KEY_0: "http.proxy",
+    GIT_CONFIG_VALUE_0: fallbackProxyUrl,
+    GIT_CONFIG_KEY_1: "https.proxy",
+    GIT_CONFIG_VALUE_1: fallbackProxyUrl,
+  });
   let refreshInFlight: Promise<RemoteRevision> | undefined;
 
-  const git = (args: readonly string[], timeoutMs = 120_000) =>
-    options.runner.run({
+  const runWithLoopbackProxyRetry = async (spec: CommandSpec) => {
+    try {
+      return await options.runner.run(spec);
+    } catch (error) {
+      if (
+        !(error instanceof CommandExecutionError) ||
+        !RETRYABLE_PROXY_FAILURE.test(error.stderr)
+      ) {
+        throw error;
+      }
+      return options.runner.run({
+        ...spec,
+        env: fallbackGitProxyEnv,
+      });
+    }
+  };
+
+  const git = (args: readonly string[], timeoutMs = 120_000, retryLoopbackProxy = false) => {
+    const spec = {
       executable: "git",
       args,
       timeoutMs,
-    });
+    } satisfies CommandSpec;
+    return retryLoopbackProxy ? runWithLoopbackProxyRetry(spec) : options.runner.run(spec);
+  };
 
   const performRefresh = async (): Promise<RemoteRevision> => {
     if (!existsSync(cacheRepoPath)) {
       await mkdir(dirname(cacheRepoPath), { recursive: true });
       if (options.cloneUrl) {
-        await git(["clone", "--bare", options.cloneUrl, cacheRepoPath]);
+        await git(
+          [
+            "clone",
+            "--bare",
+            "--depth=1",
+            "--single-branch",
+            `--branch=${options.baseBranch}`,
+            options.cloneUrl,
+            cacheRepoPath,
+          ],
+          600_000,
+        );
       } else {
-        await options.runner.run({
+        const cloneSpec = {
           executable: "gh",
-          args: ["repo", "clone", options.targetSlug, cacheRepoPath, "--", "--bare"],
-          timeoutMs: 120_000,
-        });
+          args: [
+            "repo",
+            "clone",
+            options.targetSlug,
+            cacheRepoPath,
+            "--",
+            "--bare",
+            "--depth=1",
+            "--single-branch",
+            `--branch=${options.baseBranch}`,
+          ],
+          timeoutMs: 600_000,
+        } as const;
+        await runWithLoopbackProxyRetry(cloneSpec);
       }
     }
 
-    await git([
-      "-C",
-      cacheRepoPath,
-      "fetch",
-      "--prune",
-      "origin",
-      `+refs/heads/${options.baseBranch}:${remoteRef}`,
-    ]);
+    await git(
+      [
+        "-C",
+        cacheRepoPath,
+        "fetch",
+        "--prune",
+        "origin",
+        `+refs/heads/${options.baseBranch}:${remoteRef}`,
+      ],
+      600_000,
+      true,
+    );
     const result = await git(["-C", cacheRepoPath, "rev-parse", "--verify", remoteRef]);
     const sha = result.stdout.trim();
     if (!SHA_PATTERN.test(sha)) {
@@ -131,7 +192,18 @@ export function createRepositoryCache(options: RepositoryCacheOptions): Reposito
         throw new Error("Path is not the owned worktree for this request");
       }
       if (existsSync(actualPath)) {
-        await git(["-C", cacheRepoPath, "worktree", "remove", "--force", actualPath]);
+        try {
+          await git(["-C", cacheRepoPath, "worktree", "remove", "--force", actualPath]);
+        } catch (error) {
+          if (
+            !(error instanceof CommandExecutionError) ||
+            !WINDOWS_LONG_PATH_FAILURE.test(error.stderr)
+          ) {
+            throw error;
+          }
+          assertOwnedPath(worktreeRoot, actualPath);
+          await rm(actualPath, { recursive: true, force: true });
+        }
       }
       await git(["-C", cacheRepoPath, "worktree", "prune"]);
     },

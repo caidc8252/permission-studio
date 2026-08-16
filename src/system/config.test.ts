@@ -21,5 +21,6 @@ describe("studioConfig", () => {
     );
     expect(studioConfig.worktreeRoot).toBe(join(studioConfig.cacheRoot, "worktrees"));
     expect(studioConfig.logRoot).toBe(join(studioConfig.cacheRoot, "logs"));
+    expect(studioConfig.modelCacheRoot).toBe(join(studioConfig.cacheRoot, "models"));
   });
 });

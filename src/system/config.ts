@@ -20,4 +20,5 @@ export const studioConfig = Object.freeze({
   cacheRepoPath: join(cacheRoot, "cache", "pep-webapp.git"),
   worktreeRoot: join(cacheRoot, "worktrees"),
   logRoot: join(cacheRoot, "logs"),
+  modelCacheRoot: join(cacheRoot, "models"),
 });

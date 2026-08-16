@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { CommandExecutionError, createCommandRunner } from "@/src/system/command-runner";
+import { createCommandRunner } from "@/src/system/command-runner";
+import type { CommandExecutionError } from "@/src/system/command-runner";
 
 describe("createCommandRunner", () => {
   it("captures bounded stdout from a successful process", async () => {

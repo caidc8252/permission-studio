@@ -24,6 +24,13 @@ function findOverlap(left: readonly string[], right: readonly string[]): string[
   return [...new Set(left.filter((value) => rightSet.has(value)))].sort();
 }
 
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
+}
+
 export const permissionChangeSchema = z
   .strictObject({
     version: z.literal(1),
@@ -40,7 +47,7 @@ export const permissionChangeSchema = z
       .trim()
       .min(8)
       .max(500)
-      .refine((value) => !/[\u0000-\u001f\u007f]/u.test(value), {
+      .refine((value) => !hasControlCharacter(value), {
         message: "reason must not contain control characters",
       }),
     roleChanges: z.array(roleChangeSchema).max(50),
