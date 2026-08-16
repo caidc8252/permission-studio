@@ -30,6 +30,13 @@ export interface TransferLabels {
   assigned: string;
   assignSelected: string;
   unassignSelected: string;
+  empty: string;
+  actions: string;
+  dragHandle: (item: TransferItem) => string;
+  dragPreview: (count: number) => string;
+  noSelection: string;
+  moved: (direction: TransferRequest["direction"], count: number) => string;
+  sameSideDrop: string;
 }
 
 export interface DualListEditorProps {
@@ -95,6 +102,8 @@ interface TransferRowProps {
   onDragStart: () => void;
   onDragEnd: () => void;
   getDragCount: () => number;
+  dragHandleLabel: string;
+  dragPreview: (count: number) => string;
   itemRef: (element: HTMLInputElement | null) => void;
   renderItem: (item: TransferItem) => React.ReactNode;
 }
@@ -107,6 +116,8 @@ function TransferRow({
   onDragStart,
   onDragEnd,
   getDragCount,
+  dragHandleLabel,
+  dragPreview,
   itemRef,
   renderItem,
 }: TransferRowProps) {
@@ -131,7 +142,7 @@ function TransferRow({
         const preview = document.createElement("div");
         const count = getDragCount();
         preview.className = styles.dragPreview;
-        preview.textContent = `${count} selected`;
+        preview.textContent = dragPreview(count);
         document.body.append(preview);
         nativeSetDragImage(preview, 0, 0);
         queueMicrotask(() => preview.remove());
@@ -157,8 +168,8 @@ function TransferRow({
         ref={handleRef}
         type="button"
         className={styles.dragHandle}
-        aria-label={`Drag ${item.label}`}
-        title="Drag to the other list"
+        aria-label={dragHandleLabel}
+        title={dragHandleLabel}
       >
         <span aria-hidden="true">⠿</span>
       </button>
@@ -178,6 +189,9 @@ interface TransferPanelProps {
   onDragStart: () => void;
   onDragEnd: () => void;
   isDropTarget: boolean;
+  emptyLabel: string;
+  dragHandle: (item: TransferItem) => string;
+  dragPreview: (count: number) => string;
 }
 
 function TransferPanel({
@@ -192,6 +206,9 @@ function TransferPanel({
   onDragStart,
   onDragEnd,
   isDropTarget,
+  emptyLabel,
+  dragHandle,
+  dragPreview,
 }: TransferPanelProps) {
   const groups = useMemo(() => {
     const grouped = new Map<string, TransferItem[]>();
@@ -227,6 +244,8 @@ function TransferPanel({
                   onDragStart={onDragStart}
                   onDragEnd={onDragEnd}
                   getDragCount={() => (selection.has(item.id) ? selection.size : 1)}
+                  dragHandleLabel={dragHandle(item)}
+                  dragPreview={dragPreview}
                   itemRef={(element) => {
                     if (element) itemRefs.current.set(item.id, element);
                     else itemRefs.current.delete(item.id);
@@ -238,7 +257,7 @@ function TransferPanel({
           </section>
         ))
       ) : (
-        <p className={styles.empty}>No matching items.</p>
+        <p className={styles.empty}>{emptyLabel}</p>
       )}
     </section>
   );
@@ -271,14 +290,12 @@ export function DualListEditor({
     const unique = uniqueSorted(ids);
     const destination = direction === "assign" ? "assigned" : "available";
     if (!unique.length) {
-      setAnnouncement("No items selected.");
+      setAnnouncement(labels.noSelection);
       return;
     }
     pendingFocusRef.current = { side: destination, id: unique[0]! };
     onTransfer({ direction, ids: unique });
-    setAnnouncement(
-      `${destination === "assigned" ? labels.assigned : labels.available}: ${unique.length} item${unique.length === 1 ? "" : "s"}`,
-    );
+    setAnnouncement(labels.moved(direction, unique.length));
     if (direction === "assign") setAvailableSelection(new Set());
     else setAssignedSelection(new Set());
   };
@@ -323,7 +340,7 @@ export function DualListEditor({
           .find(isTransferPanelData);
         if (!target) return;
         if (target.side === source.data.side) {
-          setAnnouncement("Item is already in that list.");
+          setAnnouncement(labels.sameSideDrop);
           return;
         }
         const selected = selectionsRef.current[source.data.side];
@@ -369,8 +386,11 @@ export function DualListEditor({
           onDragStart={() => setDraggedSide("available")}
           onDragEnd={() => setDraggedSide(null)}
           isDropTarget={dropTargetSide === "available" && draggedSide !== "available"}
+          emptyLabel={labels.empty}
+          dragHandle={labels.dragHandle}
+          dragPreview={labels.dragPreview}
         />
-        <div className={styles.actions} aria-label="Transfer actions">
+        <div className={styles.actions} aria-label={labels.actions}>
           <button
             type="button"
             disabled={!availableSelection.size}
@@ -400,6 +420,9 @@ export function DualListEditor({
           onDragStart={() => setDraggedSide("assigned")}
           onDragEnd={() => setDraggedSide(null)}
           isDropTarget={dropTargetSide === "assigned" && draggedSide !== "assigned"}
+          emptyLabel={labels.empty}
+          dragHandle={labels.dragHandle}
+          dragPreview={labels.dragPreview}
         />
       </div>
       <p role="status" aria-live="polite" className={styles.srOnly}>

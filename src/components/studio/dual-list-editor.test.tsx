@@ -37,16 +37,16 @@ import {
 const available: TransferItem[] = [
   {
     id: "user.invite",
-    label: "Invite user",
-    description: "Invite a new workspace user",
-    group: "Users",
+    label: "邀请用户",
+    description: "邀请新的工作区成员",
+    group: "用户",
     kind: "permission",
   },
   {
     id: "report.export",
-    label: "Export reports",
-    description: "Download report data",
-    group: "Reports",
+    label: "导出报表",
+    description: "下载报表数据",
+    group: "报表",
     kind: "permission",
   },
 ];
@@ -54,23 +54,31 @@ const available: TransferItem[] = [
 const assigned: TransferItem[] = [
   {
     id: "orders.view",
-    label: "View orders",
-    description: "Read order details",
-    group: "Orders",
+    label: "查看订单",
+    description: "读取订单详情",
+    group: "订单",
     kind: "permission",
   },
 ];
 
 const props: Omit<DualListEditorProps, "onTransfer"> = {
-  ariaLabel: "Role permissions",
+  ariaLabel: "角色权限",
   available,
   assigned,
   labels: {
-    search: "Search permissions",
-    available: "Available permissions",
-    assigned: "Assigned permissions",
-    assignSelected: "Assign selected",
-    unassignSelected: "Unassign selected",
+    search: "搜索权限",
+    available: "可添加权限",
+    assigned: "已分配权限",
+    assignSelected: "添加已选权限",
+    unassignSelected: "移除已选权限",
+    empty: "没有匹配的权限",
+    actions: "权限转移操作",
+    dragHandle: (item: TransferItem) => `拖动${item.label}`,
+    dragPreview: (count: number) => `已选择 ${count} 项`,
+    noSelection: "请先选择权限",
+    moved: (direction: "assign" | "unassign", count: number) =>
+      direction === "assign" ? `已添加 ${count} 项权限` : `已移除 ${count} 项权限`,
+    sameSideDrop: "该权限已在此列表中",
   },
 };
 
@@ -82,11 +90,11 @@ describe("DualListEditor", () => {
     const onTransfer = vi.fn();
     render(<DualListEditor {...props} onTransfer={onTransfer} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Invite user" }));
-    await user.click(screen.getByRole("button", { name: "Assign selected" }));
+    await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
+    await user.click(screen.getByRole("button", { name: "添加已选权限" }));
 
     expect(onTransfer).toHaveBeenCalledWith({ direction: "assign", ids: ["user.invite"] });
-    expect(screen.getByRole("status")).toHaveTextContent("Assigned permissions: 1 item");
+    expect(screen.getByRole("status")).toHaveTextContent("已添加 1 项权限");
   });
 
   it("filters visible rows without changing assignment", async () => {
@@ -94,11 +102,20 @@ describe("DualListEditor", () => {
     const onTransfer = vi.fn();
     render(<DualListEditor {...props} onTransfer={onTransfer} />);
 
-    await user.type(screen.getByRole("searchbox", { name: "Search permissions" }), "report");
+    await user.type(screen.getByRole("searchbox", { name: "搜索权限" }), "报表");
 
-    expect(screen.getByText("Export reports")).toBeVisible();
-    expect(screen.queryByText("Invite user")).not.toBeInTheDocument();
+    expect(screen.getByText("导出报表")).toBeVisible();
+    expect(screen.queryByText("邀请用户")).not.toBeInTheDocument();
     expect(onTransfer).not.toHaveBeenCalled();
+  });
+
+  it("uses caller-supplied Chinese text for the empty state and drag handle", async () => {
+    const user = userEvent.setup();
+    render(<DualListEditor {...props} onTransfer={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "拖动邀请用户" })).toBeVisible();
+    await user.type(screen.getByRole("searchbox", { name: "搜索权限" }), "不存在");
+    expect(screen.getAllByText("没有匹配的权限")).toHaveLength(2);
   });
 
   it("moves focus to the transferred row after its parent updates the lists", async () => {
@@ -125,12 +142,10 @@ describe("DualListEditor", () => {
     }
 
     render(<TransferHarness />);
-    await user.click(screen.getByRole("checkbox", { name: "Invite user" }));
-    await user.click(screen.getByRole("button", { name: "Assign selected" }));
+    await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
+    await user.click(screen.getByRole("button", { name: "添加已选权限" }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("checkbox", { name: "Invite user" })).toHaveFocus(),
-    );
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "邀请用户" })).toHaveFocus());
   });
 
   it("moves the selected rows when dropped into the opposite panel", async () => {
@@ -138,8 +153,8 @@ describe("DualListEditor", () => {
     const onTransfer = vi.fn();
     render(<DualListEditor {...props} onTransfer={onTransfer} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Invite user" }));
-    await user.click(screen.getByRole("checkbox", { name: "Export reports" }));
+    await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
+    await user.click(screen.getByRole("checkbox", { name: "导出报表" }));
 
     await waitFor(() => expect(dragAndDrop.monitorForElements).toHaveBeenCalled());
     const monitorCalls = dragAndDrop.monitorForElements.mock.calls as unknown as Array<
@@ -165,7 +180,7 @@ describe("DualListEditor", () => {
     const onTransfer = vi.fn();
     render(<DualListEditor {...props} onTransfer={onTransfer} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Invite user" }));
+    await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
     await waitFor(() => expect(dragAndDrop.monitorForElements).toHaveBeenCalled());
     const monitorCalls = dragAndDrop.monitorForElements.mock.calls as unknown as Array<
       [{ onDrop: (event: unknown) => void }]
@@ -183,14 +198,14 @@ describe("DualListEditor", () => {
     });
 
     expect(onTransfer).not.toHaveBeenCalled();
-    expect(screen.getByRole("status")).toHaveTextContent("Item is already in that list.");
+    expect(screen.getByRole("status")).toHaveTextContent("该权限已在此列表中");
   });
 
   it("uses a selected-item count in the drag preview", async () => {
     const user = userEvent.setup();
     render(<DualListEditor {...props} onTransfer={vi.fn()} />);
-    await user.click(screen.getByRole("checkbox", { name: "Invite user" }));
-    await user.click(screen.getByRole("checkbox", { name: "Export reports" }));
+    await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
+    await user.click(screen.getByRole("checkbox", { name: "导出报表" }));
 
     const registrations = dragAndDrop.draggable.mock.calls as unknown as Array<
       [{ getInitialData: () => unknown; onGenerateDragPreview: (event: unknown) => void }]
@@ -204,7 +219,7 @@ describe("DualListEditor", () => {
     registration!.onGenerateDragPreview({ nativeSetDragImage });
 
     expect(nativeSetDragImage).toHaveBeenCalledWith(
-      expect.objectContaining({ textContent: "2 selected" }),
+      expect.objectContaining({ textContent: "已选择 2 项" }),
       0,
       0,
     );
