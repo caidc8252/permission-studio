@@ -260,6 +260,13 @@ export interface TransferLabels {
   assigned: string;
   assignSelected: string;
   unassignSelected: string;
+  empty: string;
+  actions: string;
+  dragHandle: (item: TransferItem) => string;
+  dragPreview: (count: number) => string;
+  noSelection: string;
+  moved: (direction: TransferRequest["direction"], count: number) => string;
+  sameSideDrop: string;
 }
 ```
 
