@@ -43,7 +43,7 @@ corepack pnpm dev
 - Windows：`%LOCALAPPDATA%\permission-studio`
 - 其他系统：`$XDG_DATA_HOME/permission-studio`，未设置时使用用户数据目录下的 `.local/share/permission-studio`
 
-其中包含裸仓库缓存、按请求创建的 worktree、模型 JSON 和不超过 64 KiB 的脱敏失败日志。准备结果默认 30 分钟过期；丢弃、过期和成功创建 PR 都会清理对应本地 worktree。失败任务会保留受控 worktree 作为诊断证据，点击界面的“丢弃”后才会清理。
+其中包含裸仓库缓存、按请求创建的 worktree、模型 JSON 和不超过 64 KiB 的脱敏失败日志（最多保留 100 份或 7 天）。准备结果默认 30 分钟过期；丢弃、过期和成功创建 PR 都会清理对应本地 worktree。失败任务会保留受控 worktree 作为诊断证据，点击界面的“丢弃”后才会清理。
 
 成功创建 PR 后，远端分支保留给 GitHub PR 使用。合并或关闭 PR 后，可按团队惯例删除远端分支。如果 push 已成功但 `gh pr create` 失败，界面会显示不含本地路径和凭证的恢复命令；远端分支不会被自动删除。
 

@@ -81,4 +81,28 @@ describe("permissionStudioModelSchema", () => {
       }),
     ).toThrow(/unknown plan/i);
   });
+
+  it("rejects missing and cyclic menu parents", () => {
+    expect(() =>
+      permissionStudioModelSchema.parse({
+        ...validModel,
+        menuRegistry: {
+          orders: { ...validModel.menuRegistry.orders, parentMenuCode: "missing" },
+        },
+      }),
+    ).toThrow(/unknown parent/i);
+    expect(() =>
+      permissionStudioModelSchema.parse({
+        ...validModel,
+        menuRegistry: {
+          orders: { ...validModel.menuRegistry.orders, parentMenuCode: "root" },
+          root: {
+            ...validModel.menuRegistry.orders,
+            menuCode: "root",
+            parentMenuCode: "orders",
+          },
+        },
+      }),
+    ).toThrow(/cycle/i);
+  });
 });

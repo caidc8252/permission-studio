@@ -81,8 +81,10 @@ export function buildWorkbenchView(
     [...effectiveOwners].filter((owner) => contractMenuCodes.has(owner)),
   );
   for (const menuCode of [...visibleMenuCodes]) {
+    const visited = new Set<string>([menuCode]);
     let parent = model.menuRegistry[menuCode]?.parentMenuCode ?? null;
-    while (parent) {
+    while (parent && !visited.has(parent)) {
+      visited.add(parent);
       visibleMenuCodes.add(parent);
       parent = model.menuRegistry[parent]?.parentMenuCode ?? null;
     }

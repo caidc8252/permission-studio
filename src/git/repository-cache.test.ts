@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -195,6 +195,16 @@ describe("RepositoryCache", () => {
     expect((await cache.refresh()).sha).toBe(fixture.initialSha);
   });
 
+  it("quarantines a pre-existing invalid cache and rebuilds atomically", async () => {
+    const { cache, cacheRepoPath, fixture } = setup();
+    mkdirSync(cacheRepoPath, { recursive: true });
+
+    expect((await cache.refresh()).sha).toBe(fixture.initialSha);
+    expect(existsSync(cacheRepoPath)).toBe(true);
+    const siblings = readdirSync(join(cacheRepoPath, ".."));
+    expect(siblings.some((name) => name.startsWith("pep-webapp.git.invalid-"))).toBe(true);
+  });
+
   it("retries clone without a refused loopback Git proxy", async () => {
     const fixture = createGitFixture();
     fixtures.push(fixture);
@@ -215,7 +225,19 @@ describe("RepositoryCache", () => {
               durationMs: 1,
             });
           }
+          mkdirSync(spec.args[3]!, { recursive: true });
           return { exitCode: 0, stdout: "", stderr: "", durationMs: 1 };
+        }
+        if (spec.args.includes("--is-bare-repository")) {
+          return { exitCode: 0, stdout: "true\n", stderr: "", durationMs: 1 };
+        }
+        if (spec.args.includes("get-url")) {
+          return {
+            exitCode: 0,
+            stdout: "https://github.com/fixture/pep-webapp.git\n",
+            stderr: "",
+            durationMs: 1,
+          };
         }
         if (spec.args.includes("rev-parse")) {
           return {
@@ -243,7 +265,7 @@ describe("RepositoryCache", () => {
       "repo",
       "clone",
       "fixture/pep-webapp",
-      join(fixture.root, "cache", "pep-webapp.git"),
+      expect.stringContaining("pep-webapp.git.clone-"),
       "--",
       "--bare",
       "--depth=1",
@@ -280,7 +302,19 @@ describe("RepositoryCache", () => {
               durationMs: 1,
             });
           }
+          mkdirSync(spec.args[3]!, { recursive: true });
           return { exitCode: 0, stdout: "", stderr: "", durationMs: 1 };
+        }
+        if (spec.args.includes("--is-bare-repository")) {
+          return { exitCode: 0, stdout: "true\n", stderr: "", durationMs: 1 };
+        }
+        if (spec.args.includes("get-url")) {
+          return {
+            exitCode: 0,
+            stdout: "https://github.com/fixture/pep-webapp.git\n",
+            stderr: "",
+            durationMs: 1,
+          };
         }
         if (spec.args.includes("rev-parse")) {
           return {
@@ -317,7 +351,16 @@ describe("RepositoryCache", () => {
     const fixture = createGitFixture();
     fixtures.push(fixture);
     const cacheRepoPath = join(fixture.root, "cache", "pep-webapp.git");
-    mkdirSync(cacheRepoPath, { recursive: true });
+    await createCommandRunner().run({
+      executable: "git",
+      args: ["init", "--bare", cacheRepoPath],
+      timeoutMs: 30_000,
+    });
+    await createCommandRunner().run({
+      executable: "git",
+      args: ["-C", cacheRepoPath, "remote", "add", "origin", fixture.remotePath],
+      timeoutMs: 30_000,
+    });
     const calls: CommandSpec[] = [];
     let fetchAttempts = 0;
     const runner: CommandRunner = {
@@ -335,14 +378,9 @@ describe("RepositoryCache", () => {
               durationMs: 1,
             });
           }
-          return { exitCode: 0, stdout: "", stderr: "", durationMs: 1 };
+          return createCommandRunner().run(spec);
         }
-        return {
-          exitCode: 0,
-          stdout: `${fixture.initialSha}\n`,
-          stderr: "",
-          durationMs: 1,
-        };
+        return createCommandRunner().run(spec);
       },
     };
     const cache = createRepositoryCache({
@@ -351,6 +389,7 @@ describe("RepositoryCache", () => {
       worktreeRoot: join(fixture.root, "worktrees"),
       targetSlug: "fixture/pep-webapp",
       baseBranch: "develop",
+      cloneUrl: fixture.remotePath,
       fallbackProxyUrl: "",
     });
 

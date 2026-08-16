@@ -97,6 +97,27 @@ export const permissionStudioModelSchema = z
           message: `menu registry key "${key}" does not match embedded code "${entry.menuCode}"`,
         });
       }
+      if (entry.parentMenuCode && !menuCodes.has(entry.parentMenuCode)) {
+        context.addIssue({
+          code: "custom",
+          path: ["menuRegistry", key, "parentMenuCode"],
+          message: `menu references unknown parent "${entry.parentMenuCode}"`,
+        });
+      }
+      const visited = new Set<string>([key]);
+      let parent = entry.parentMenuCode;
+      while (parent && menuCodes.has(parent)) {
+        if (visited.has(parent)) {
+          context.addIssue({
+            code: "custom",
+            path: ["menuRegistry", key, "parentMenuCode"],
+            message: `menu parent cycle includes "${parent}"`,
+          });
+          break;
+        }
+        visited.add(parent);
+        parent = model.menuRegistry[parent]?.parentMenuCode ?? null;
+      }
     }
     if (
       registryCodes.length !== permissions.size ||

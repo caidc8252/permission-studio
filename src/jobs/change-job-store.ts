@@ -23,6 +23,7 @@ export interface ChangeJob {
   errorCode?: string;
   prUrl?: string;
   recoveryCommand?: string;
+  failureSummary?: string;
   worktree?: WorktreeHandle;
 }
 
@@ -41,6 +42,7 @@ export interface PublicChangeJob {
   errorCode?: string;
   prUrl?: string;
   recoveryCommand?: string;
+  failureSummary?: string;
 }
 
 export interface ChangeJobStore {
@@ -76,5 +78,6 @@ export function toPublicChangeJob(job: ChangeJob): PublicChangeJob {
     ...(job.errorCode ? { errorCode: job.errorCode } : {}),
     ...(job.prUrl ? { prUrl: job.prUrl } : {}),
     ...(job.recoveryCommand ? { recoveryCommand: job.recoveryCommand } : {}),
+    ...(job.failureSummary ? { failureSummary: job.failureSummary } : {}),
   };
 }

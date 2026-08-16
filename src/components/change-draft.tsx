@@ -32,6 +32,7 @@ interface ChangeDraftProps {
 
 interface ClientChangeJob {
   requestId: string;
+  baseSha?: string;
   state: "validating" | "awaiting-confirmation" | "finalizing" | "completed" | "failed";
   confirmationNonce?: string;
   validationSteps?: Array<{ name: string; status: "passed"; durationMs: number }>;
@@ -39,6 +40,7 @@ interface ClientChangeJob {
   errorCode?: string;
   prUrl?: string;
   recoveryCommand?: string;
+  failureSummary?: string;
 }
 
 class HttpFlowError extends Error {
@@ -59,6 +61,7 @@ async function responseJson<T>(response: Response): Promise<T> {
 }
 
 const INTENT_REQUEST_ID = "00000000000000000000000000";
+const ACTIVE_JOB_KEY = "permission-studio:active-change";
 
 function ownerCodes(model: PermissionStudioModel, kind: "menu" | "widget"): string[] {
   if (kind === "menu") return Object.keys(model.menuRegistry).sort();
@@ -106,6 +109,7 @@ export function ChangeDraft({
   const [diffInspected, setDiffInspected] = useState(false);
   const [internalPending, setInternalPending] = useState(false);
   const [flowMessage, setFlowMessage] = useState<string | null>(null);
+  const [pollAttempt, setPollAttempt] = useState(0);
   const impact = useMemo(() => buildImpactDiff(model, draft), [draft, model]);
   const roleChangeCount = impact.addedRolePermissions.length + impact.removedRolePermissions.length;
   const contractChangeCount =
@@ -114,14 +118,13 @@ export function ChangeDraft({
   const busy = pending || internalPending;
   const editingLocked = busy || job !== null;
   const canPrepare = hasChanges && isReasonReady(reason) && !stale && !editingLocked;
-  const storageKey = `permission-studio:change:${model.sourceSha}`;
   const menus = ownerCodes(model, "menu");
   const widgets = ownerCodes(model, "widget");
 
   const refreshJob = async (requestId: string) => {
     const response = await fetch(`/api/changes/${requestId}`, { cache: "no-store" });
     if (response.status === 404) {
-      window.sessionStorage.removeItem(storageKey);
+      window.sessionStorage.removeItem(ACTIVE_JOB_KEY);
       setJob(null);
       setFlowMessage("准备结果已过期或被丢弃");
       return null;
@@ -132,24 +135,39 @@ export function ChangeDraft({
   };
 
   useEffect(() => {
-    const requestId = window.sessionStorage.getItem(storageKey);
-    if (requestId)
-      void refreshJob(requestId).catch(() => window.sessionStorage.removeItem(storageKey));
-  }, [storageKey]);
+    const saved = window.sessionStorage.getItem(ACTIVE_JOB_KEY);
+    if (!saved) return;
+    try {
+      const record = JSON.parse(saved) as { requestId?: string; baseSha?: string };
+      if (!record.requestId) return;
+      setJob({ requestId: record.requestId, baseSha: record.baseSha, state: "validating" });
+      void refreshJob(record.requestId).catch(() => {
+        setError("暂时无法恢复任务状态，将继续重试");
+      });
+    } catch {
+      window.sessionStorage.removeItem(ACTIVE_JOB_KEY);
+    }
+  }, []);
 
   useEffect(() => {
-    if (job) window.sessionStorage.setItem(storageKey, job.requestId);
-  }, [job, storageKey]);
+    if (job)
+      window.sessionStorage.setItem(
+        ACTIVE_JOB_KEY,
+        JSON.stringify({ requestId: job.requestId, baseSha: job.baseSha ?? model.sourceSha }),
+      );
+  }, [job, model.sourceSha]);
 
   useEffect(() => {
     if (job?.state !== "validating" && job?.state !== "finalizing") return;
     const timer = window.setTimeout(() => {
-      void refreshJob(job.requestId).catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "无法刷新变更状态");
-      });
-    }, 100);
+      void refreshJob(job.requestId)
+        .catch((cause: unknown) => {
+          setError(cause instanceof Error ? cause.message : "无法刷新变更状态");
+        })
+        .finally(() => setPollAttempt((current) => current + 1));
+    }, 1_200);
     return () => window.clearTimeout(timer);
-  }, [job]);
+  }, [job, pollAttempt]);
 
   const prepare = async () => {
     if (!canPrepare) return;
@@ -206,7 +224,7 @@ export function ChangeDraft({
       const response = await fetch(`/api/changes/${job.requestId}`, { method: "DELETE" });
       if (!response.ok) await responseJson(response);
       setJob(null);
-      window.sessionStorage.removeItem(storageKey);
+      window.sessionStorage.removeItem(ACTIVE_JOB_KEY);
       setFlowMessage("变更草稿已丢弃");
       setDiffInspected(false);
     } catch (cause) {
@@ -373,6 +391,9 @@ export function ChangeDraft({
                     ? "Draft PR 已创建"
                     : "变更未完成"}
           </h3>
+          <p>
+            请求 ID：<code>{job.requestId}</code>
+          </p>
           {job.validationSteps?.length ? (
             <ul className="validation-results">
               {job.validationSteps.map((step) => (
@@ -426,6 +447,9 @@ export function ChangeDraft({
                     : "变更校验或远端写入失败"}
               </p>
               {job.recoveryCommand ? <code>{job.recoveryCommand}</code> : null}
+              {job.failureSummary ? (
+                <pre aria-label="脱敏失败日志">{job.failureSummary}</pre>
+              ) : null}
               <button type="button" disabled={busy} onClick={() => void discard()}>
                 丢弃并清理失败现场
               </button>
@@ -435,7 +459,7 @@ export function ChangeDraft({
             <button
               type="button"
               onClick={() => {
-                window.sessionStorage.removeItem(storageKey);
+                window.sessionStorage.removeItem(ACTIVE_JOB_KEY);
                 setJob(null);
                 setDraft(createEmptyDraft());
                 setReason("");

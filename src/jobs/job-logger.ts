@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { CommandExecutionError } from "@/src/system/command-runner";
@@ -40,5 +40,18 @@ export function createJobFailureLogger(logRoot: string) {
     );
     await mkdir(logRoot, { recursive: true });
     await writeFile(join(logRoot, `${requestId}.log`), content, "utf8");
+    const logs = await Promise.all(
+      (await readdir(logRoot))
+        .filter((name) => name.endsWith(".log"))
+        .map(async (name) => ({ name, modified: (await stat(join(logRoot, name))).mtimeMs })),
+    );
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    await Promise.all(
+      logs
+        .sort((left, right) => right.modified - left.modified)
+        .filter((log, index) => index >= 100 || log.modified < cutoff)
+        .map((log) => rm(join(logRoot, log.name), { force: true })),
+    );
+    return content;
   };
 }

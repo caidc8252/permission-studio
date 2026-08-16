@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rename, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import {
@@ -84,14 +84,73 @@ export function createRepositoryCache(options: RepositoryCacheOptions): Reposito
     }
   };
 
-  const cleanupPartialClone = async () => {
-    if (!existsSync(cacheRepoPath)) return;
-    const parent = dirname(cacheRepoPath);
-    const pathFromParent = relative(parent, cacheRepoPath);
-    if (!pathFromParent || pathFromParent.startsWith("..") || isAbsolute(pathFromParent)) {
-      throw new Error("Cache repository path is not safely owned");
+  const expectedOrigin = options.cloneUrl
+    ? resolve(options.cloneUrl)
+    : `https://github.com/${options.targetSlug}`;
+  const normalizedOrigin = (value: string) => {
+    const trimmed = value
+      .trim()
+      .replace(/\.git$/iu, "")
+      .replace(/\/$/u, "");
+    if (/^(?:[A-Za-z]:[\\/]|\/)/u.test(trimmed)) return resolve(trimmed).toLowerCase();
+    return trimmed.replace(/^git@github\.com:/iu, "https://github.com/").toLowerCase();
+  };
+  const validateCacheRepository = async (path: string) => {
+    const bare = await git(["-C", path, "rev-parse", "--is-bare-repository"]);
+    if (bare.stdout.trim() !== "true") throw new Error("Cache repository is not bare");
+    const origin = await git(["-C", path, "remote", "get-url", "origin"]);
+    if (normalizedOrigin(origin.stdout) !== normalizedOrigin(expectedOrigin)) {
+      throw new Error("Cache repository origin does not match the target");
     }
-    await rm(cacheRepoPath, { recursive: true, force: true });
+  };
+
+  const cloneRepository = async () => {
+    const temporaryPath = `${cacheRepoPath}.clone-${process.pid}-${Date.now()}`;
+    await rm(temporaryPath, { recursive: true, force: true });
+    try {
+      if (options.cloneUrl) {
+        await runWithLoopbackProxyRetry(
+          {
+            executable: "git",
+            args: [
+              "clone",
+              "--bare",
+              "--depth=1",
+              "--single-branch",
+              `--branch=${options.baseBranch}`,
+              options.cloneUrl,
+              temporaryPath,
+            ],
+            timeoutMs: 600_000,
+          },
+          async () => rm(temporaryPath, { recursive: true, force: true }),
+        );
+      } else {
+        await runWithLoopbackProxyRetry(
+          {
+            executable: "gh",
+            args: [
+              "repo",
+              "clone",
+              options.targetSlug,
+              temporaryPath,
+              "--",
+              "--bare",
+              "--depth=1",
+              "--single-branch",
+              `--branch=${options.baseBranch}`,
+            ],
+            timeoutMs: 600_000,
+          },
+          async () => rm(temporaryPath, { recursive: true, force: true }),
+        );
+      }
+      await validateCacheRepository(temporaryPath);
+      await rename(temporaryPath, cacheRepoPath);
+    } catch (error) {
+      await rm(temporaryPath, { recursive: true, force: true });
+      throw error;
+    }
   };
 
   const git = (args: readonly string[], timeoutMs = 120_000, retryLoopbackProxy = false) => {
@@ -115,49 +174,16 @@ export function createRepositoryCache(options: RepositoryCacheOptions): Reposito
       }
       startupCleanupComplete = true;
     }
-    if (!existsSync(cacheRepoPath)) {
-      await mkdir(dirname(cacheRepoPath), { recursive: true });
+    await mkdir(dirname(cacheRepoPath), { recursive: true });
+    if (existsSync(cacheRepoPath)) {
       try {
-        if (options.cloneUrl) {
-          await runWithLoopbackProxyRetry(
-            {
-              executable: "git",
-              args: [
-                "clone",
-                "--bare",
-                "--depth=1",
-                "--single-branch",
-                `--branch=${options.baseBranch}`,
-                options.cloneUrl,
-                cacheRepoPath,
-              ],
-              timeoutMs: 600_000,
-            },
-            cleanupPartialClone,
-          );
-        } else {
-          const cloneSpec = {
-            executable: "gh",
-            args: [
-              "repo",
-              "clone",
-              options.targetSlug,
-              cacheRepoPath,
-              "--",
-              "--bare",
-              "--depth=1",
-              "--single-branch",
-              `--branch=${options.baseBranch}`,
-            ],
-            timeoutMs: 600_000,
-          } as const;
-          await runWithLoopbackProxyRetry(cloneSpec, cleanupPartialClone);
-        }
-      } catch (error) {
-        await cleanupPartialClone();
-        throw error;
+        await validateCacheRepository(cacheRepoPath);
+      } catch {
+        const quarantine = `${cacheRepoPath}.invalid-${Date.now()}`;
+        await rename(cacheRepoPath, quarantine);
       }
     }
+    if (!existsSync(cacheRepoPath)) await cloneRepository();
 
     await git(["-C", cacheRepoPath, "worktree", "prune"]);
 

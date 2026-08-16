@@ -46,7 +46,11 @@ interface ChangeJobServiceOptions {
   validate: (worktreePath: string) => Promise<ValidationResult>;
   now?: () => Date;
   nonce: () => string;
-  logFailure?: (requestId: string, phase: "prepare" | "finalize", error: unknown) => Promise<void>;
+  logFailure?: (
+    requestId: string,
+    phase: "prepare" | "finalize",
+    error: unknown,
+  ) => Promise<string>;
   finalization?: {
     runner: CommandRunner;
     getViewer: () => Promise<GhViewer>;
@@ -162,10 +166,30 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
         options.store.set(job);
         return toPublicChangeJob(job);
       } catch (error) {
-        await options.logFailure?.(change.requestId, "prepare", error).catch(() => undefined);
+        const failureSummary = await options
+          .logFailure?.(change.requestId, "prepare", error)
+          .catch(() => undefined);
         if (job) {
+          if (job.worktree && options.finalization) {
+            const currentDiff = await options.finalization.runner
+              .run({
+                executable: "git",
+                args: ["diff", "--binary"],
+                cwd: job.worktree.path,
+                timeoutMs: 120_000,
+                maxOutputBytes: MAX_DIFF_BYTES,
+              })
+              .catch(() => undefined);
+            if (
+              currentDiff?.stdout &&
+              !diffPaths(currentDiff.stdout).some((path) => !ALLOWED_CATALOG_PATHS.includes(path))
+            ) {
+              job.diff = currentDiff.stdout;
+            }
+          }
           job.state = "failed";
           job.errorCode = error instanceof ChangeJobError ? error.code : "PREPARE_FAILED";
+          if (failureSummary) job.failureSummary = failureSummary;
           options.store.set(job);
         }
         if (error instanceof ChangeJobError) throw error;
@@ -323,8 +347,11 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
         options.store.set(job);
         return toPublicChangeJob(job);
       } catch (error) {
-        await options.logFailure?.(job.requestId, "finalize", error).catch(() => undefined);
+        const failureSummary = await options
+          .logFailure?.(job.requestId, "finalize", error)
+          .catch(() => undefined);
         job.state = "failed";
+        if (failureSummary) job.failureSummary = failureSummary;
         const failure =
           error instanceof ChangeJobError
             ? error

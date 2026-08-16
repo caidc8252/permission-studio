@@ -136,7 +136,7 @@ describe("ChangeDraft", () => {
     await user.type(screen.getByLabelText("变更原因"), "为运营角色增加订单查看能力");
     await user.click(screen.getByRole("button", { name: "验证变更" }));
 
-    expect(await screen.findByText("等待最终确认")).toBeVisible();
+    expect(await screen.findByText("等待最终确认", {}, { timeout: 3_000 })).toBeVisible();
     expect(screen.getByLabelText("准备好的变更 diff")).toHaveTextContent("orders.manage");
     expect(screen.getByText("typecheck")).toBeVisible();
     expect(screen.getByRole("button", { name: "确认推送并创建 Draft PR" })).toBeDisabled();
@@ -181,7 +181,28 @@ describe("ChangeDraft", () => {
     await user.click(screen.getByLabelText("角色 preset_ops 的 orders.manage"));
     await user.type(screen.getByLabelText("变更原因"), "这是一个足够长的变更原因");
     await user.click(screen.getByRole("button", { name: "验证变更" }));
-    expect(await screen.findByText("准备结果已过期或被丢弃")).toBeVisible();
+    expect(await screen.findByText("准备结果已过期或被丢弃", {}, { timeout: 3_000 })).toBeVisible();
+  });
+
+  it("keeps and retries a restored job after a transient read failure", async () => {
+    const requestId = "01J5ZZZZZZZZZZZZZZZZZZZZZZ";
+    window.sessionStorage.setItem(
+      "permission-studio:active-change",
+      JSON.stringify({ requestId, baseSha: model.sourceSha }),
+    );
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(
+        Response.json({ requestId, baseSha: model.sourceSha, state: "awaiting-confirmation" }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ChangeDraft model={model} />);
+
+    expect(await screen.findByText("暂时无法恢复任务状态，将继续重试")).toBeVisible();
+    expect(await screen.findByText("等待最终确认", {}, { timeout: 3_000 })).toBeVisible();
+    expect(window.sessionStorage.getItem("permission-studio:active-change")).toContain(requestId);
   });
 
   it("discards an awaiting prepared change without a remote write", async () => {
@@ -262,6 +283,7 @@ describe("ChangeDraft", () => {
       errorCode: "PR_CREATE_FAILED",
       recoveryCommand:
         "gh pr create --repo org/repo --base develop --head permission-studio/id --draft",
+      failureSummary: '{"error":"PR_CREATE_FAILED","stderr":"[REDACTED]"}',
     };
     const fetchMock = vi
       .fn()
@@ -277,5 +299,8 @@ describe("ChangeDraft", () => {
     await user.click(screen.getByRole("button", { name: "确认推送并创建 Draft PR" }));
     expect(await screen.findByText("远端分支已保留，请手动创建 Draft PR")).toBeVisible();
     expect(screen.getByText(failed.recoveryCommand)).toBeVisible();
+    expect(screen.getByText(requestId)).toBeVisible();
+    expect(screen.getByLabelText("脱敏失败日志")).toHaveTextContent("[REDACTED]");
+    expect(screen.getByRole("button", { name: "丢弃并清理失败现场" })).toBeEnabled();
   });
 });

@@ -133,6 +133,17 @@ describe("change job service", () => {
     expect(removeWorktree).toHaveBeenCalledOnce();
   });
 
+  it("exposes only the bounded redacted failure summary returned by the logger", async () => {
+    const { service } = setup({
+      validate: vi.fn().mockRejectedValue(new Error("secret")),
+      logFailure: vi.fn().mockResolvedValue('{"error":"typecheck failed","stderr":"[REDACTED]"}'),
+    });
+
+    await expect(service.prepareChange(change)).rejects.toBeInstanceOf(ChangeJobError);
+    expect(service.getChangeJob(requestId)?.failureSummary).toContain("[REDACTED]");
+    expect(service.getChangeJob(requestId)?.failureSummary).not.toContain("C:\\owned");
+  });
+
   it("rejects unapproved diff paths and supports discard", async () => {
     const { service, removeWorktree } = setup({
       validate: vi
