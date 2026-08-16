@@ -12,6 +12,7 @@ const change: PermissionChange = {
   version: 1,
   requestId,
   baseSha,
+  title: "chore(permissions): grant report export",
   reason: "为运营角色增加订单查看能力",
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.view"], remove: [] }],
   contractChanges: [],
@@ -123,6 +124,7 @@ describe("finalizeChange", () => {
         base: "develop",
         head: branchName,
         draft: true,
+        title: "chore(permissions): grant report export",
       }),
     );
     expect(result).toMatchObject({

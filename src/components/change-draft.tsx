@@ -14,6 +14,7 @@ import type { PermissionStudioModel } from "@/src/domain/model";
 
 export interface PrepareIntent {
   baseSha: string;
+  title: string;
   reason: string;
   roleChanges: Array<{ roleCode: string; add: string[]; remove: string[] }>;
   contractChanges: Array<{
@@ -62,6 +63,7 @@ async function responseJson<T>(response: Response): Promise<T> {
 
 const INTENT_REQUEST_ID = "00000000000000000000000000";
 const ACTIVE_JOB_KEY = "permission-studio:active-change";
+const DEFAULT_PR_TITLE = "chore(permissions): update permission catalogs";
 
 function ownerCodes(model: PermissionStudioModel, kind: "menu" | "widget"): string[] {
   if (kind === "menu") return Object.keys(model.menuRegistry).sort();
@@ -89,11 +91,12 @@ function toIntent(
   draft: PermissionDraft,
   reason: string,
 ): PrepareIntent {
-  const { baseSha, roleChanges, contractChanges } = buildPermissionChange(model, draft, {
+  const { baseSha, title, roleChanges, contractChanges } = buildPermissionChange(model, draft, {
     requestId: INTENT_REQUEST_ID,
+    title: DEFAULT_PR_TITLE,
     reason,
   });
-  return { baseSha, reason: reason.trim(), roleChanges, contractChanges };
+  return { baseSha, title, reason: reason.trim(), roleChanges, contractChanges };
 }
 
 export function ChangeDraft({

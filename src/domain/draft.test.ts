@@ -160,12 +160,14 @@ describe("permission drafts", () => {
     expect(
       buildPermissionChange(model, draft, {
         requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
+        title: "chore(permissions): grant report export",
         reason: "为运营角色增加订单管理权限",
       }),
     ).toEqual({
       version: 1,
       requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
       baseSha: model.sourceSha,
+      title: "chore(permissions): grant report export",
       reason: "为运营角色增加订单管理权限",
       roleChanges: [
         {

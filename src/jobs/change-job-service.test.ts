@@ -10,6 +10,7 @@ const change: PermissionChange = {
   version: 1,
   requestId,
   baseSha: validModel.sourceSha,
+  title: "chore(permissions): grant report export",
   reason: "为运营角色增加订单查看能力",
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.manage"], remove: [] }],
   contractChanges: [],
@@ -54,6 +55,7 @@ describe("change job service", () => {
     expect(prepared.state).toBe("awaiting-confirmation");
     expect(prepared.diff).toContain("roles.ts");
     expect(prepared.confirmationNonce).toBe("confirmation-nonce");
+    expect(prepared.title).toBe("chore(permissions): grant report export");
     expect(JSON.stringify(prepared)).not.toContain("C:\\owned");
   });
 

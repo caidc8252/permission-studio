@@ -18,6 +18,7 @@ const prepareIntentSchema = z.strictObject({
     .string()
     .length(40)
     .regex(/^[0-9a-f]+$/),
+  title: z.string().max(120),
   reason: z.string().max(500),
   roleChanges: z
     .array(z.strictObject({ roleCode: z.string().min(1).max(200), ...listChangeSchema.shape }))

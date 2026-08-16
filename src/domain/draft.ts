@@ -269,7 +269,7 @@ export function buildImpactDiff(model: PermissionStudioModel, draft: PermissionD
 export function buildPermissionChange(
   model: PermissionStudioModel,
   draft: PermissionDraft,
-  metadata: { requestId: string; reason: string },
+  metadata: { requestId: string; title: string; reason: string },
 ): PermissionChange {
   const roleChanges = Object.entries(draft.rolePermissions).map(([roleCode, codes]) => {
     const role = model.roles.find((candidate) => candidate.code === roleCode);
@@ -299,6 +299,7 @@ export function buildPermissionChange(
     version: 1,
     requestId: metadata.requestId,
     baseSha: model.sourceSha,
+    title: metadata.title,
     reason: metadata.reason,
     roleChanges,
     contractChanges,

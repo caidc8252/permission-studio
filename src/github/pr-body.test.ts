@@ -7,6 +7,7 @@ const change: PermissionChange = {
   version: 1,
   requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
   baseSha: "0123456789abcdef0123456789abcdef01234567",
+  title: "chore(permissions): grant report export",
   reason: "为 <运营&支持> 增加订单 | 查看能力",
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.view"], remove: [] }],
   contractChanges: [

@@ -34,6 +34,7 @@ describe("ChangeDraft", () => {
 
     expect(onPrepare).toHaveBeenCalledWith({
       baseSha: model.sourceSha,
+      title: "chore(permissions): update permission catalogs",
       reason: "为运营角色增加订单查看能力",
       roleChanges: [{ roleCode: "preset_ops", add: ["orders.manage"], remove: [] }],
       contractChanges: [],

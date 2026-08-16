@@ -6,6 +6,7 @@ const validChange = {
   version: 1,
   requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
   baseSha: "0123456789abcdef0123456789abcdef01234567",
+  title: "chore(permissions): update permission catalogs",
   reason: "为运营角色增加订单查看能力",
   roleChanges: [
     {
@@ -18,6 +19,19 @@ const validChange = {
 };
 
 describe("permission change protocol", () => {
+  it("trims and preserves a safe PR title", () => {
+    expect(
+      normalizePermissionChange({
+        ...validChange,
+        title: "  chore: update permissions  ",
+      }).title,
+    ).toBe("chore: update permissions");
+  });
+
+  it.each(["short", "x".repeat(121), "bad\ntitle"])("rejects PR title %j", (title) => {
+    expect(() => normalizePermissionChange({ ...validChange, title })).toThrow();
+  });
+
   it("normalizes leaf arrays and removes empty entries", () => {
     expect(
       normalizePermissionChange({

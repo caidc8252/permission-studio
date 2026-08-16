@@ -42,6 +42,14 @@ export const permissionChangeSchema = z
       .string()
       .length(40)
       .regex(/^[0-9a-f]+$/),
+    title: z
+      .string()
+      .trim()
+      .min(8)
+      .max(120)
+      .refine((value) => !hasControlCharacter(value), {
+        message: "title must not contain control characters",
+      }),
     reason: z
       .string()
       .trim()
@@ -124,6 +132,7 @@ export function normalizePermissionChange(input: unknown): PermissionChange {
   const parsed = permissionChangeSchema.parse(input);
   return permissionChangeSchema.parse({
     ...parsed,
+    title: parsed.title.trim(),
     reason: parsed.reason.trim(),
     roleChanges: parsed.roleChanges
       .map((role) => ({

@@ -7,6 +7,7 @@ import { validModel } from "@/tests/fixtures/model";
 const origin = "http://127.0.0.1:3100";
 const intent = {
   baseSha: validModel.sourceSha,
+  title: "chore(permissions): grant report export",
   reason: "为运营角色增加订单查看能力",
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.manage"], remove: [] }],
   contractChanges: [],
@@ -47,6 +48,7 @@ describe("POST /api/changes/prepare", () => {
         version: 1,
         requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
         baseSha: validModel.sourceSha,
+        title: "chore(permissions): grant report export",
       }),
     );
     expect(await response.json()).toMatchObject({ state: "awaiting-confirmation" });
@@ -60,6 +62,12 @@ describe("POST /api/changes/prepare", () => {
     const extra = await handler(request({ ...intent, requestId: "browser-chosen" }));
     expect(extra.status).toBe(400);
     expect((await extra.json()).code).toBe("INVALID_CHANGE");
+  });
+
+  it("rejects missing and control-character PR titles", async () => {
+    const { handler } = setup();
+    expect((await handler(request({ ...intent, title: undefined }))).status).toBe(400);
+    expect((await handler(request({ ...intent, title: "bad\ntitle" }))).status).toBe(400);
   });
 
   it("rejects stale models and unknown role, permission, and contract references", async () => {

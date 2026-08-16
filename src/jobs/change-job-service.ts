@@ -338,7 +338,7 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
           base: "develop",
           head: job.branchName,
           draft: true,
-          title: "chore(permissions): update permission catalogs",
+          title: job.change.title,
           bodyFile,
         });
         job.state = "completed";

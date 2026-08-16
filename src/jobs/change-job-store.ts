@@ -31,6 +31,7 @@ export interface PublicChangeJob {
   requestId: string;
   state: ChangeJobState;
   baseSha: string;
+  title: string;
   reason: string;
   branchName: string;
   createdAt: string;
@@ -67,6 +68,7 @@ export function toPublicChangeJob(job: ChangeJob): PublicChangeJob {
     requestId: job.requestId,
     state: job.state,
     baseSha: job.change.baseSha,
+    title: job.change.title,
     reason: job.change.reason,
     branchName: job.branchName,
     createdAt: job.createdAt,
