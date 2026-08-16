@@ -1,0 +1,168 @@
+.nodeCard {
+  width: 260px;
+  min-height: 112px;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(15 23 42 / 8%);
+  color: var(--text, #172033);
+}
+
+.nodeCard[data-kind="contract"],
+.nodeCard[data-kind="group"] {
+  width: 190px;
+}
+
+.nodeCard[data-kind="empty"] {
+  width: 180px;
+  color: var(--muted, #64748b);
+}
+
+.nodeCard[data-state="active"] {
+  border-color: var(--accent, #2563eb);
+  background: var(--accent-soft, #eaf2ff);
+}
+
+.nodeCard[data-state="mixed"] {
+  border-color: #d97706;
+  background: #fff8eb;
+}
+
+.nodeCard[data-search-match="true"] {
+  outline: 3px solid rgb(37 99 235 / 22%);
+  outline-offset: 3px;
+}
+
+.nodeHeader,
+.nodeMain,
+.nodeBadges {
+  display: flex;
+  align-items: center;
+}
+
+.nodeHeader {
+  min-height: 20px;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.nodeKind {
+  color: var(--muted, #64748b);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.nodeBadges {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.searchBadge,
+.addedBadge,
+.removedBadge {
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.searchBadge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.addedBadge {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.removedBadge {
+  background: var(--danger-soft, #fff1f0);
+  color: var(--danger, #b42318);
+}
+
+.nodeMain {
+  gap: 10px;
+}
+
+.nodeMain input {
+  width: 17px;
+  min-width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--accent, #2563eb);
+  cursor: pointer;
+}
+
+.nodeMain input:disabled {
+  cursor: not-allowed;
+}
+
+.nodeCopy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.nodeCopy h3,
+.nodeCopy strong,
+.nodeCopy span,
+.nodeCopy code {
+  overflow-wrap: anywhere;
+}
+
+.nodeCopy h3,
+.nodeCopy strong {
+  margin: 0;
+  font-size: 0.94rem;
+}
+
+.nodeCopy span,
+.nodeCopy code {
+  color: var(--muted, #64748b);
+  font-size: 0.75rem;
+}
+
+.collapseButton {
+  display: grid;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border-radius: 7px;
+}
+
+:global(.react-flow__handle) {
+  width: 8px;
+  height: 8px;
+  border: 2px solid #fff;
+  background: #94a3b8;
+}
+
+:global(.contract-graph-edge--active .react-flow__edge-path) {
+  stroke: var(--accent, #2563eb);
+  stroke-width: 2.2;
+}
+
+:global(.contract-graph-edge--mixed .react-flow__edge-path) {
+  stroke: #d97706;
+  stroke-width: 2;
+}
+
+:global(.contract-graph-edge--inactive .react-flow__edge-path) {
+  stroke: #94a3b8;
+  stroke-width: 1.4;
+}
+
+:global(.react-flow__edge-text) {
+  fill: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+}
