@@ -76,5 +76,10 @@ describe("buildWorkbenchView", () => {
     });
 
     expect(view.visibleMenus.map((item) => item.menuCode)).toEqual(["root", "orders"]);
+    expect(view.visibleMenus.map((item) => [item.menuCode, item.depth])).toEqual([
+      ["root", 0],
+      ["orders", 1],
+    ]);
+    expect(view.permissions.find((item) => item.code === "orders.view")?.ownerLabel).toBe("订单");
   });
 });

@@ -23,6 +23,7 @@ export interface WorkbenchPermission {
   label: string;
   description: string;
   ownerCode: string;
+  ownerLabel: string;
   status: WorkbenchPermissionStatus;
   decision: PermissionDecision;
 }
@@ -33,6 +34,7 @@ export interface WorkbenchMenu {
   parentMenuCode: string | null;
   path: string | null;
   order: number;
+  depth: number;
 }
 
 export interface WorkbenchView {
@@ -50,6 +52,18 @@ function statusFor(decision: PermissionDecision): WorkbenchPermissionStatus {
   if (decision.blockedByPlan) return "plan-blocked";
   if (decision.contractGranted) return "role-blocked";
   return "contract-blocked";
+}
+
+function menuDepth(model: PermissionStudioModel, menuCode: string): number {
+  const visited = new Set<string>([menuCode]);
+  let depth = 0;
+  let parent = model.menuRegistry[menuCode]?.parentMenuCode ?? null;
+  while (parent && !visited.has(parent)) {
+    visited.add(parent);
+    depth += 1;
+    parent = model.menuRegistry[parent]?.parentMenuCode ?? null;
+  }
+  return depth;
 }
 
 export function buildWorkbenchView(
@@ -101,11 +115,15 @@ export function buildWorkbenchView(
         const entry = model.permissionRegistry[code];
         const decision = result.decisions[code];
         if (!entry || !decision) return null;
+        const owner = model.menuRegistry[entry.belongToMenuCode];
         return {
           code,
           label: translated(model, entry.label, code),
           description: translated(model, entry.desc, entry.desc || code),
           ownerCode: entry.belongToMenuCode,
+          ownerLabel: owner
+            ? translated(model, owner.title, owner.menuCode)
+            : entry.belongToMenuCode,
           status: statusFor(decision),
           decision,
         } satisfies WorkbenchPermission;
@@ -120,6 +138,7 @@ export function buildWorkbenchView(
         parentMenuCode: menu.parentMenuCode,
         path: menu.path,
         order: menu.order,
+        depth: menuDepth(model, menu.menuCode),
       }))
       .sort(
         (left, right) => left.order - right.order || left.menuCode.localeCompare(right.menuCode),
