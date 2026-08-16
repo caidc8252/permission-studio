@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { ChangeJobError, type ChangeJobService } from "@/src/jobs/change-job-service";
 import { changeJobService } from "@/src/server/runtime";
+import { isExpectedMutation } from "@/src/server/request-boundary";
 import { studioConfig } from "@/src/system/config";
 
 const MAX_CONFIRM_BYTES = 8 * 1024;
@@ -12,13 +13,13 @@ interface ConfirmContext {
 }
 
 interface ConfirmHandlerOptions {
-  finalizeChange: ChangeJobService["finalizeChange"];
+  startFinalizeChange: ChangeJobService["startFinalizeChange"];
   expectedOrigin: string;
 }
 
 export function createConfirmChangeHandler(options: ConfirmHandlerOptions) {
   return async function confirm(request: Request, context: ConfirmContext): Promise<Response> {
-    if (request.headers.get("origin") !== options.expectedOrigin) {
+    if (!isExpectedMutation(request, options.expectedOrigin)) {
       return Response.json(
         { code: "ORIGIN_REJECTED", message: "请求来源不受信任。" },
         { status: 403 },
@@ -37,7 +38,7 @@ export function createConfirmChangeHandler(options: ConfirmHandlerOptions) {
     try {
       const body = confirmationSchema.parse(JSON.parse(new TextDecoder().decode(bytes)));
       const { id } = await context.params;
-      return Response.json(await options.finalizeChange(id, body.nonce));
+      return Response.json(await options.startFinalizeChange(id, body.nonce), { status: 202 });
     } catch (error) {
       if (error instanceof ChangeJobError) {
         return Response.json(
@@ -54,6 +55,6 @@ export function createConfirmChangeHandler(options: ConfirmHandlerOptions) {
 }
 
 export const POST = createConfirmChangeHandler({
-  finalizeChange: (id, nonce) => changeJobService.finalizeChange(id, nonce),
+  startFinalizeChange: (id, nonce) => changeJobService.startFinalizeChange(id, nonce),
   expectedOrigin: studioConfig.serverOrigin,
 });

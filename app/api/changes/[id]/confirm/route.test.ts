@@ -6,10 +6,10 @@ const origin = "http://127.0.0.1:3100";
 
 describe("POST /api/changes/:id/confirm", () => {
   it("requires same origin and an opaque nonce", async () => {
-    const finalizeChange = vi
+    const startFinalizeChange = vi
       .fn()
       .mockResolvedValue({ state: "completed", prUrl: "https://github.com/org/repo/pull/42" });
-    const handler = createConfirmChangeHandler({ finalizeChange, expectedOrigin: origin });
+    const handler = createConfirmChangeHandler({ startFinalizeChange, expectedOrigin: origin });
     const context = { params: Promise.resolve({ id: "01J5ZZZZZZZZZZZZZZZZZZZZZZ" }) };
 
     const rejected = await handler(
@@ -30,12 +30,15 @@ describe("POST /api/changes/:id/confirm", () => {
       }),
       context,
     );
-    expect(accepted.status).toBe(200);
-    expect(finalizeChange).toHaveBeenCalledWith("01J5ZZZZZZZZZZZZZZZZZZZZZZ", "confirm-once");
+    expect(accepted.status).toBe(202);
+    expect(startFinalizeChange).toHaveBeenCalledWith("01J5ZZZZZZZZZZZZZZZZZZZZZZ", "confirm-once");
   });
 
   it("rejects missing, extra, and oversized confirmation payloads", async () => {
-    const handler = createConfirmChangeHandler({ finalizeChange: vi.fn(), expectedOrigin: origin });
+    const handler = createConfirmChangeHandler({
+      startFinalizeChange: vi.fn(),
+      expectedOrigin: origin,
+    });
     const context = { params: Promise.resolve({ id: "id" }) };
     const send = (body: unknown) =>
       handler(

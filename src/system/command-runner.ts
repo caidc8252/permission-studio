@@ -83,6 +83,7 @@ export function createCommandRunner(): CommandRunner {
         let stderr: Buffer<ArrayBufferLike> = Buffer.alloc(0);
         let forcedCode: CommandErrorCode | undefined;
         let spawnError: Error | undefined;
+        let terminationStarted = false;
 
         const child = spawn(spec.executable, [...spec.args], {
           cwd: spec.cwd,
@@ -90,7 +91,27 @@ export function createCommandRunner(): CommandRunner {
           shell: false,
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,
+          detached: process.platform !== "win32",
         });
+
+        const terminateTree = () => {
+          if (terminationStarted || child.pid === undefined) return;
+          terminationStarted = true;
+          if (process.platform === "win32") {
+            const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+              shell: false,
+              stdio: "ignore",
+              windowsHide: true,
+            });
+            killer.on("error", () => child.kill());
+            return;
+          }
+          try {
+            process.kill(-child.pid, "SIGKILL");
+          } catch {
+            child.kill("SIGKILL");
+          }
+        };
 
         const append = (
           current: Buffer<ArrayBufferLike>,
@@ -98,7 +119,7 @@ export function createCommandRunner(): CommandRunner {
         ): Buffer<ArrayBufferLike> => {
           if (current.byteLength + chunk.byteLength > maxBytes) {
             forcedCode ??= "COMMAND_OUTPUT_LIMIT";
-            child.kill();
+            terminateTree();
             return current;
           }
           return Buffer.concat([current, chunk]);
@@ -116,7 +137,7 @@ export function createCommandRunner(): CommandRunner {
 
         const timeout = setTimeout(() => {
           forcedCode ??= "COMMAND_TIMEOUT";
-          child.kill();
+          terminateTree();
         }, spec.timeoutMs);
         timeout.unref();
 

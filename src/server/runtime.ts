@@ -8,6 +8,7 @@ import { createRemoteModelLoader } from "@/src/pep-webapp/model-loader";
 import { applyPermissionChange } from "@/src/pep-webapp/apply-change.mjs";
 import { createChangeJobService } from "@/src/jobs/change-job-service";
 import { createChangeJobStore } from "@/src/jobs/change-job-store";
+import { createJobFailureLogger } from "@/src/jobs/job-logger";
 import { runTargetValidation } from "@/src/jobs/validation";
 import { createCommandRunner } from "@/src/system/command-runner";
 import { studioConfig } from "@/src/system/config";
@@ -46,6 +47,7 @@ export const changeJobService = createChangeJobService({
       pnpmCommand: currentPnpmCommand,
     }),
   nonce: () => randomBytes(24).toString("base64url"),
+  logFailure: createJobFailureLogger(studioConfig.logRoot),
   finalization: {
     runner: commandRunner,
     getViewer: () => ghClient.getViewer(),

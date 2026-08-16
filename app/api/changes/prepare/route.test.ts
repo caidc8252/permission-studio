@@ -21,15 +21,15 @@ function request(body: unknown, headers: Record<string, string> = {}) {
 }
 
 function setup() {
-  const prepareChange = vi.fn().mockResolvedValue({
+  const startPrepareChange = vi.fn().mockResolvedValue({
     requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
     state: "awaiting-confirmation",
   });
   return {
-    prepareChange,
+    prepareChange: startPrepareChange,
     handler: createPrepareChangeHandler({
       loadModel: async () => validModel as unknown as PermissionStudioModel,
-      prepareChange,
+      startPrepareChange,
       generateId: () => "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
       expectedOrigin: origin,
     }),

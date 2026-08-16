@@ -36,6 +36,23 @@ function assertOwnedWorktree(root: string, candidate: string): string {
   return absoluteCandidate;
 }
 
+function statusPaths(status: string): string[] {
+  return status
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .flatMap((line) => {
+      const path = line.slice(3);
+      return path.includes(" -> ") ? path.split(" -> ") : [path];
+    });
+}
+
+function assertApprovedPaths(paths: readonly string[]): void {
+  const approved = new Set<string>(ALLOWED_CATALOG_PATHS);
+  if (paths.some((path) => !approved.has(path))) {
+    throw new Error("Worktree contains a change to an unapproved path");
+  }
+}
+
 export async function runTargetValidation(options: ValidationOptions): Promise<ValidationResult> {
   const cwd = assertOwnedWorktree(options.worktreeRoot, options.worktreePath);
   const pnpm = async (name: string, args: readonly string[], timeoutMs: number) => {
@@ -80,6 +97,16 @@ export async function runTargetValidation(options: ValidationOptions): Promise<V
   steps.push(await pnpm("typecheck", ["typecheck"], 600_000));
   const diffCheck = await git("diff check", ["diff", "--check"]);
   steps.push(diffCheck.step);
-  const diff = await git("final diff", ["diff", "--binary", "--", ...ALLOWED_CATALOG_PATHS]);
+  const status = await git("worktree status", [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+  ]);
+  assertApprovedPaths(statusPaths(status.result.stdout));
+  const staged = await git("staged paths", ["diff", "--cached", "--name-only"]);
+  if (staged.result.stdout.trim()) {
+    throw new Error("Validation scripts left staged changes");
+  }
+  const diff = await git("final diff", ["diff", "--binary"]);
   return { steps, diff: diff.result.stdout };
 }

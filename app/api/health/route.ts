@@ -5,14 +5,22 @@ import { NextResponse } from "next/server";
 import { createGhClient, type GhPreflight } from "@/src/github/gh-client";
 import { createCommandRunner } from "@/src/system/command-runner";
 import { studioConfig } from "@/src/system/config";
+import { isExpectedHost } from "@/src/server/request-boundary";
 
 interface HealthDependencies {
   preflight(): Promise<GhPreflight>;
   cacheReady(): boolean;
+  expectedOrigin: string;
 }
 
 export function createHealthHandler(dependencies: HealthDependencies) {
-  return async function GET() {
+  return async function GET(request: Request) {
+    if (!isExpectedHost(request, dependencies.expectedOrigin)) {
+      return NextResponse.json(
+        { code: "HOST_REJECTED", message: "请求主机不受信任。" },
+        { status: 403 },
+      );
+    }
     const preflight = await dependencies.preflight();
     const body = {
       ready: preflight.ready,
@@ -34,4 +42,5 @@ export const dynamic = "force-dynamic";
 export const GET = createHealthHandler({
   preflight: () => ghClient.preflight(),
   cacheReady: () => existsSync(studioConfig.cacheRepoPath),
+  expectedOrigin: studioConfig.serverOrigin,
 });

@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createCommandRunner } from "@/src/system/command-runner";
@@ -48,6 +51,21 @@ describe("createCommandRunner", () => {
     ).rejects.toMatchObject({
       code: "COMMAND_TIMEOUT",
     } satisfies Partial<CommandExecutionError>);
+  });
+
+  it("terminates descendant processes on timeout", async () => {
+    const runner = createCommandRunner();
+    const root = mkdtempSync(join(tmpdir(), "permission-command-tree-"));
+    const marker = join(root, "descendant-finished");
+    const descendant = `setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 500)`;
+    const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'ignore' }); setTimeout(() => {}, 10000)`;
+
+    await expect(
+      runner.run({ executable: process.execPath, args: ["-e", parent], timeoutMs: 100 }),
+    ).rejects.toMatchObject({ code: "COMMAND_TIMEOUT" });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(existsSync(marker)).toBe(false);
+    rmSync(root, { recursive: true, force: true });
   });
 
   it("rejects output beyond the configured byte limit", async () => {

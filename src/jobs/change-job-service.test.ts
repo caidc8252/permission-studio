@@ -90,12 +90,35 @@ describe("change job service", () => {
     await vi.waitFor(() => expect(service.getChangeJob(requestId)?.state).toBe("validating"));
     await expect(
       service.prepareChange({ ...change, requestId: "01J6AAAAAAAAAAAAAAAAAAAAAA" }),
-    ).rejects.toMatchObject({ code: "PREPARE_BUSY" });
+    ).rejects.toMatchObject({ code: "OPERATION_BUSY" });
     release();
     await first;
   });
 
-  it("records validation failures and cleans their worktree", async () => {
+  it("starts validation in the background and returns the polling state", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { service } = setup({
+      validate: vi.fn().mockImplementation(async () => {
+        await gate;
+        return {
+          steps: [],
+          diff: "diff --git a/apps/web/manifest/catalog/roles.ts b/apps/web/manifest/catalog/roles.ts\n",
+        };
+      }),
+    });
+
+    const started = await service.startPrepareChange(change);
+    expect(started.state).toBe("validating");
+    release();
+    await vi.waitFor(() =>
+      expect(service.getChangeJob(requestId)?.state).toBe("awaiting-confirmation"),
+    );
+  });
+
+  it("records validation failures and preserves their worktree until discard", async () => {
     const { service, removeWorktree } = setup({
       validate: vi.fn().mockRejectedValue(new Error("typecheck failed at C:\\secret")),
     });
@@ -105,6 +128,8 @@ describe("change job service", () => {
       errorCode: "PREPARE_FAILED",
     });
     expect(JSON.stringify(service.getChangeJob(requestId))).not.toContain("secret");
+    expect(removeWorktree).not.toHaveBeenCalled();
+    await service.discardPreparedChange(requestId);
     expect(removeWorktree).toHaveBeenCalledOnce();
   });
 

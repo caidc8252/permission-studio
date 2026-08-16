@@ -12,9 +12,24 @@ import { validModel } from "@/tests/fixtures/model";
 
 const model = validModel as unknown as PermissionStudioModel;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("PermissionWorkbench", () => {
+  it("loads the API model envelope at the real client boundary", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(Response.json({ data: model, refreshedAt: "2026-08-16T10:00:00.000Z" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PermissionWorkbench />);
+
+    expect(await screen.findByText(model.sourceSha)).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith("/api/model", { cache: "no-store" });
+  });
+
   it("renders semantic simulation controls, permission states, modules, and source metadata", async () => {
     const user = userEvent.setup();
     render(<PermissionWorkbench initialModel={model} loadModel={vi.fn()} />);
@@ -27,6 +42,10 @@ describe("PermissionWorkbench", () => {
     expect(screen.getByLabelText("角色 preset_ops")).toBeChecked();
     expect(screen.getByText("有效")).toBeVisible();
     expect(screen.getByText("套餐阻止")).toBeVisible();
+    expect(screen.getByLabelText("orders.view evidence")).toHaveTextContent(
+      "Contracts: ISO · Roles: preset_ops",
+    );
+    expect(screen.getByLabelText("orders.manage evidence")).toHaveTextContent("Plan blocked: yes");
     expect(within(screen.getByRole("tree", { name: "可见菜单" })).getByText("订单")).toBeVisible();
     expect(screen.getByText(model.sourceSha)).toBeVisible();
     expect(screen.getByRole("button", { name: "刷新 develop" })).toBeEnabled();

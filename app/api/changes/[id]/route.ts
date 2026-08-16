@@ -1,5 +1,6 @@
 import { ChangeJobError, type ChangeJobService } from "@/src/jobs/change-job-service";
 import { changeJobService } from "@/src/server/runtime";
+import { isExpectedHost, isExpectedMutation } from "@/src/server/request-boundary";
 import { studioConfig } from "@/src/system/config";
 
 interface RouteContext {
@@ -8,7 +9,13 @@ interface RouteContext {
 
 export function createChangeJobHandlers(service: ChangeJobService, expectedOrigin: string) {
   return {
-    async get(_request: Request, context: RouteContext) {
+    async get(request: Request, context: RouteContext) {
+      if (!isExpectedHost(request, expectedOrigin)) {
+        return Response.json(
+          { code: "HOST_REJECTED", message: "请求主机不受信任。" },
+          { status: 403 },
+        );
+      }
       const { id } = await context.params;
       const job = service.getChangeJob(id);
       return job
@@ -16,7 +23,7 @@ export function createChangeJobHandlers(service: ChangeJobService, expectedOrigi
         : Response.json({ code: "CHANGE_NOT_FOUND", message: "未找到变更请求。" }, { status: 404 });
     },
     async remove(request: Request, context: RouteContext) {
-      if (request.headers.get("origin") !== expectedOrigin) {
+      if (!isExpectedMutation(request, expectedOrigin)) {
         return Response.json(
           { code: "ORIGIN_REJECTED", message: "请求来源不受信任。" },
           { status: 403 },

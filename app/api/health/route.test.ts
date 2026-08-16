@@ -14,9 +14,10 @@ describe("GET /api/health", () => {
         viewerPermission: "ADMIN",
       }),
       cacheReady: () => false,
+      expectedOrigin: "http://127.0.0.1:3100",
     });
 
-    const response = await handler();
+    const response = await handler(new Request("http://127.0.0.1:3100/api/health"));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -40,9 +41,10 @@ describe("GET /api/health", () => {
         errorCode: "GH_NOT_AUTHENTICATED",
       }),
       cacheReady: () => false,
+      expectedOrigin: "http://127.0.0.1:3100",
     });
 
-    const response = await handler();
+    const response = await handler(new Request("http://127.0.0.1:3100/api/health"));
 
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({

@@ -17,7 +17,14 @@ const change: PermissionChange = {
   contractChanges: [],
 };
 
-function setup(options: { remoteSha?: string; prFailure?: boolean } = {}) {
+function setup(
+  options: {
+    remoteSha?: string;
+    prFailure?: boolean;
+    worktreeDiff?: string;
+    initiallyStaged?: boolean;
+  } = {},
+) {
   const store = createChangeJobStore();
   const job: ChangeJob = {
     requestId,
@@ -34,10 +41,23 @@ function setup(options: { remoteSha?: string; prFailure?: boolean } = {}) {
   };
   store.set(job);
   const calls: CommandSpec[] = [];
+  let staged = options.initiallyStaged ?? false;
   const runner: CommandRunner = {
     async run(spec): Promise<CommandResult> {
       calls.push(spec);
-      return { exitCode: 0, stdout: "", stderr: "", durationMs: 1 };
+      const command = [spec.executable, ...spec.args].join(" ");
+      if (command.startsWith("git add ")) staged = true;
+      const stdout =
+        command === "git status --porcelain=v1 --untracked-files=all"
+          ? `${staged ? "M " : " M"} apps/web/manifest/catalog/roles.ts\n`
+          : command === "git diff --cached --name-only"
+            ? staged
+              ? "apps/web/manifest/catalog/roles.ts\n"
+              : ""
+            : command === "git diff --binary" || command === "git diff --cached --binary"
+              ? (options.worktreeDiff ?? job.diff)
+              : "";
+      return { exitCode: 0, stdout, stderr: "", durationMs: 1 };
     },
   };
   const removeWorktree = vi.fn().mockResolvedValue(undefined);
@@ -47,12 +67,10 @@ function setup(options: { remoteSha?: string; prFailure?: boolean } = {}) {
   const service = createChangeJobService({
     store,
     cache: {
-      refresh: vi
-        .fn()
-        .mockResolvedValue({
-          sha: options.remoteSha ?? baseSha,
-          ref: "refs/remotes/origin/develop",
-        }),
+      refresh: vi.fn().mockResolvedValue({
+        sha: options.remoteSha ?? baseSha,
+        ref: "refs/remotes/origin/develop",
+      }),
       createWorktree: vi.fn(),
       removeWorktree,
     },
@@ -80,6 +98,9 @@ describe("finalizeChange", () => {
     const result = await service.finalizeChange(requestId, "confirm-once");
 
     expect(calls.map(({ executable, args }) => [executable, ...args])).toEqual([
+      ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+      ["git", "diff", "--cached", "--name-only"],
+      ["git", "diff", "--binary"],
       ["git", "config", "user.name", "caidc8252"],
       ["git", "config", "user.email", "42+caidc8252@users.noreply.github.com"],
       ["git", "switch", "-c", branchName],
@@ -90,6 +111,8 @@ describe("finalizeChange", () => {
         "apps/web/manifest/catalog/roles.ts",
         "apps/web/manifest/catalog/contract-types.ts",
       ],
+      ["git", "diff", "--cached", "--name-only"],
+      ["git", "diff", "--cached", "--binary"],
       ["git", "commit", "-m", "chore(permissions): apply Permission Studio change"],
       ["git", "push", "origin", `HEAD:refs/heads/${branchName}`],
     ]);
@@ -110,13 +133,81 @@ describe("finalizeChange", () => {
     expect(await service.finalizeChange(requestId, "already-consumed")).toEqual(result);
   });
 
-  it("rejects a stale second fetch before push and cleans up", async () => {
+  it("rejects a stale second fetch before push and preserves evidence", async () => {
     const { service, calls, removeWorktree } = setup({ remoteSha: "f".repeat(40) });
     await expect(service.finalizeChange(requestId, "confirm-once")).rejects.toMatchObject({
       code: "STALE_MODEL",
     });
     expect(calls).toEqual([]);
+    expect(removeWorktree).not.toHaveBeenCalled();
+    await service.discardPreparedChange(requestId);
     expect(removeWorktree).toHaveBeenCalledOnce();
+  });
+
+  it("uses the global operation lock while finalization is running", async () => {
+    let release!: (value: { sha: string; ref: string }) => void;
+    const refresh = vi.fn().mockImplementation(
+      () =>
+        new Promise<{ sha: string; ref: string }>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const { service } = setup();
+    const internal = service.getInternalJob(requestId)!;
+    const lockedService = createChangeJobService({
+      store: {
+        get: (id) => (id === requestId ? internal : undefined),
+        set: vi.fn(),
+        delete: vi.fn(),
+        values: () => [internal],
+      },
+      cache: {
+        refresh,
+        createWorktree: vi.fn(),
+        removeWorktree: vi.fn().mockResolvedValue(undefined),
+      },
+      applyChange: vi.fn(),
+      validate: vi.fn(),
+      now: () => new Date("2026-08-16T10:05:00.000Z"),
+      nonce: () => "unused",
+      finalization: {
+        runner: { run: vi.fn() },
+        getViewer: vi.fn(),
+        createDraftPullRequest: vi.fn(),
+        writeBody: vi.fn(),
+      },
+    });
+
+    const started = await lockedService.startFinalizeChange(requestId, "confirm-once");
+    expect(started.state).toBe("finalizing");
+    await expect(
+      lockedService.prepareChange({ ...change, requestId: "01J6AAAAAAAAAAAAAAAAAAAAAA" }),
+    ).rejects.toMatchObject({ code: "OPERATION_BUSY" });
+    release({ sha: "f".repeat(40), ref: "refs/remotes/origin/develop" });
+    await vi.waitFor(() => expect(lockedService.getChangeJob(requestId)?.state).toBe("failed"));
+  });
+
+  it("rejects an already staged file before finalization", async () => {
+    const { service, calls } = setup({ initiallyStaged: true });
+
+    await expect(service.finalizeChange(requestId, "confirm-once")).rejects.toMatchObject({
+      code: "DIRTY_INDEX",
+    });
+    expect(calls.some((call) => call.args[0] === "commit")).toBe(false);
+    expect(calls.some((call) => call.args[0] === "push")).toBe(false);
+  });
+
+  it("rejects a changed approved file when its diff no longer matches confirmation", async () => {
+    const { service, calls } = setup({
+      worktreeDiff:
+        "diff --git a/apps/web/manifest/catalog/roles.ts b/apps/web/manifest/catalog/roles.ts\n+tampered\n",
+    });
+
+    await expect(service.finalizeChange(requestId, "confirm-once")).rejects.toMatchObject({
+      code: "FINALIZE_DIFF_MISMATCH",
+    });
+    expect(calls.some((call) => call.args[0] === "commit")).toBe(false);
+    expect(calls.some((call) => call.args[0] === "push")).toBe(false);
   });
 
   it("keeps the remote branch and returns a redacted recovery command after PR failure", async () => {

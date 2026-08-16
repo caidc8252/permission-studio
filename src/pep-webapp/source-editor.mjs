@@ -41,6 +41,9 @@ function parseCatalog(source) {
   const declarations = new Map();
   for (const declaration of topLevelDeclarations(ast)) {
     if (declaration.id.type === "Identifier" && declaration.init) {
+      if (declarations.has(declaration.id.name)) {
+        throw new Error(`Duplicate catalog owner ${declaration.id.name}`);
+      }
       declarations.set(declaration.id.name, unwrap(declaration.init));
     }
   }
@@ -95,7 +98,10 @@ function findObjectProperty(object, key) {
   for (const property of object.properties) {
     if (property.type === "SpreadElement") throw new Error("Object spreads are unsupported");
     const name = propertyName(property);
-    if (name === key) match = property;
+    if (name === key) {
+      if (match) throw new Error(`Duplicate catalog key ${key}`);
+      match = property;
+    }
   }
   if (!match) throw new Error(`Catalog key ${key} was not found`);
   return match;
@@ -105,16 +111,16 @@ function findTargetArray(declarations, request) {
   if (request.owner === "GLOBAL_ROLES") {
     const roles = requiredDeclaration(declarations, request.owner, "ArrayExpression");
     let selected;
+    const roleCodes = new Set();
     for (const element of roles.elements) {
       const role = unwrap(element);
       if (!role || role.type !== "ObjectExpression") {
         throw new Error("GLOBAL_ROLES entries must be static objects");
       }
-      const codeProperty = role.properties.find(
-        (property) => property.type === "ObjectProperty" && propertyName(property) === "code",
-      );
-      if (!codeProperty) throw new Error("GLOBAL_ROLES entries require a static code");
+      const codeProperty = findObjectProperty(role, "code");
       const code = stringValue(codeProperty.value, "Role code");
+      if (roleCodes.has(code)) throw new Error(`Duplicate role code ${code}`);
+      roleCodes.add(code);
       if (code === request.key) selected = role;
     }
     if (!selected) throw new Error(`Catalog key ${request.key} was not found`);

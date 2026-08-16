@@ -181,6 +181,45 @@ export const permissionStudioModelSchema = z
         });
       }
     }
+    for (const [permission, conditions] of Object.entries(model.permissionAvailability)) {
+      if (!permissions.has(permission)) {
+        context.addIssue({
+          code: "custom",
+          path: ["permissionAvailability", permission],
+          message: `availability references unknown permission "${permission}"`,
+        });
+      }
+      for (const [index, condition] of conditions.entries()) {
+        if (!contracts.has(condition.contract)) {
+          context.addIssue({
+            code: "custom",
+            path: ["permissionAvailability", permission, index, "contract"],
+            message: `availability references unknown contract "${condition.contract}"`,
+          });
+        }
+      }
+    }
+    for (const [contract, policy] of Object.entries(model.contractPlanPolicies)) {
+      const plans = new Set(policy.plans);
+      for (const [permission, permittedPlans] of Object.entries(policy.permissionPlans)) {
+        if (!permissions.has(permission)) {
+          context.addIssue({
+            code: "custom",
+            path: ["contractPlanPolicies", contract, "permissionPlans", permission],
+            message: `plan policy references unknown permission "${permission}"`,
+          });
+        }
+        for (const plan of permittedPlans) {
+          if (!plans.has(plan)) {
+            context.addIssue({
+              code: "custom",
+              path: ["contractPlanPolicies", contract, "permissionPlans", permission],
+              message: `plan policy references unknown plan "${plan}"`,
+            });
+          }
+        }
+      }
+    }
   });
 
 export type PermissionStudioModel = z.infer<typeof permissionStudioModelSchema>;

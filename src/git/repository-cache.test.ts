@@ -51,6 +51,19 @@ describe("RepositoryCache", () => {
     });
   });
 
+  it("cleans only owned ULID worktree directories on first refresh", async () => {
+    const { cache, worktreeRoot } = setup();
+    const orphan = join(worktreeRoot, "01j5zzzzzzzzzzzzzzzzzzzzzz");
+    const unrelated = join(worktreeRoot, "keep-me");
+    mkdirSync(orphan, { recursive: true });
+    mkdirSync(unrelated, { recursive: true });
+
+    await cache.refresh();
+
+    expect(existsSync(orphan)).toBe(false);
+    expect(existsSync(unrelated)).toBe(true);
+  });
+
   it("fetches a later develop commit without depending on a user checkout", async () => {
     const { cache, fixture } = setup();
     await cache.refresh();
@@ -111,12 +124,13 @@ describe("RepositoryCache", () => {
     const { cache } = setup(runner);
     const revision = await cache.refresh();
     const worktree = await cache.createWorktree("01J5ZZZZZZZZZZZZZZZZZZZZZZ", revision.sha);
+    const pruneCallsBeforeRemoval = pruneCalls;
     failRemoval = true;
 
     await cache.removeWorktree(worktree);
 
     expect(existsSync(worktree.path)).toBe(false);
-    expect(pruneCalls).toBe(1);
+    expect(pruneCalls).toBe(pruneCallsBeforeRemoval + 1);
   });
 
   it("rejects invalid identifiers, SHAs, and cleanup outside the owned root", async () => {
@@ -157,6 +171,28 @@ describe("RepositoryCache", () => {
       "simulated worktree failure",
     );
     expect(existsSync(partialPath)).toBe(false);
+  });
+
+  it("removes a partial clone so the next refresh can retry cleanly", async () => {
+    const delegate = createCommandRunner();
+    let failClone = true;
+    let partialPath = "";
+    const runner: CommandRunner = {
+      async run(spec): Promise<CommandResult> {
+        if (spec.args[0] === "clone" && failClone) {
+          partialPath = spec.args.at(-1)!;
+          mkdirSync(partialPath, { recursive: true });
+          failClone = false;
+          throw new Error("simulated clone failure");
+        }
+        return delegate.run(spec);
+      },
+    };
+    const { cache, fixture } = setup(runner);
+
+    await expect(cache.refresh()).rejects.toThrow("simulated clone failure");
+    expect(existsSync(partialPath)).toBe(false);
+    expect((await cache.refresh()).sha).toBe(fixture.initialSha);
   });
 
   it("retries clone without a refused loopback Git proxy", async () => {

@@ -55,4 +55,30 @@ describe("permissionStudioModelSchema", () => {
       }),
     ).toThrow(/unknown contract/i);
   });
+
+  it("rejects incomplete availability and plan-policy references", () => {
+    expect(() =>
+      permissionStudioModelSchema.parse({
+        ...validModel,
+        permissionAvailability: { "missing.permission": [{ contract: "ISO" }] },
+      }),
+    ).toThrow(/availability.*unknown permission/i);
+    expect(() =>
+      permissionStudioModelSchema.parse({
+        ...validModel,
+        permissionAvailability: { "orders.view": [{ contract: "UNKNOWN" }] },
+      }),
+    ).toThrow(/availability.*unknown contract/i);
+    expect(() =>
+      permissionStudioModelSchema.parse({
+        ...validModel,
+        contractPlanPolicies: {
+          ISO: {
+            plans: ["STANDARD"],
+            permissionPlans: { "orders.manage": ["UNKNOWN"] },
+          },
+        },
+      }),
+    ).toThrow(/unknown plan/i);
+  });
 });

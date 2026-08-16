@@ -4,6 +4,7 @@ import { normalizePermissionChange, type PermissionChange } from "@/src/domain/c
 import type { PermissionStudioModel } from "@/src/domain/model";
 import { ChangeJobError, type ChangeJobService } from "@/src/jobs/change-job-service";
 import { changeJobService, remoteModelLoader } from "@/src/server/runtime";
+import { isExpectedMutation } from "@/src/server/request-boundary";
 import { studioConfig } from "@/src/system/config";
 import { generateUlid } from "@/src/system/ulid";
 
@@ -34,7 +35,7 @@ const prepareIntentSchema = z.strictObject({
 
 interface PrepareHandlerOptions {
   loadModel: () => Promise<PermissionStudioModel>;
-  prepareChange: ChangeJobService["prepareChange"];
+  startPrepareChange: ChangeJobService["startPrepareChange"];
   generateId: () => string;
   expectedOrigin: string;
 }
@@ -78,7 +79,7 @@ function validateReferences(model: PermissionStudioModel, change: PermissionChan
 
 export function createPrepareChangeHandler(options: PrepareHandlerOptions) {
   return async function prepare(request: Request): Promise<Response> {
-    if (request.headers.get("origin") !== options.expectedOrigin) {
+    if (!isExpectedMutation(request, options.expectedOrigin)) {
       return json("ORIGIN_REJECTED", "请求来源不受信任。", 403);
     }
     if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
@@ -101,7 +102,7 @@ export function createPrepareChangeHandler(options: PrepareHandlerOptions) {
         ...input,
       });
       validateReferences(model, change);
-      return Response.json(await options.prepareChange(change), { status: 202 });
+      return Response.json(await options.startPrepareChange(change), { status: 202 });
     } catch (error) {
       if (error instanceof ChangeJobError) return json(error.code, error.message, error.status);
       return json("INVALID_CHANGE", "变更内容无效或引用了未知权限。", 400);
@@ -111,7 +112,7 @@ export function createPrepareChangeHandler(options: PrepareHandlerOptions) {
 
 const handler = createPrepareChangeHandler({
   loadModel: () => remoteModelLoader.load(),
-  prepareChange: (change) => changeJobService.prepareChange(change),
+  startPrepareChange: (change) => changeJobService.startPrepareChange(change),
   generateId: generateUlid,
   expectedOrigin: studioConfig.serverOrigin,
 });

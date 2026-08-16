@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import {
@@ -61,8 +61,12 @@ export function createRepositoryCache(options: RepositoryCacheOptions): Reposito
     GIT_CONFIG_VALUE_1: fallbackProxyUrl,
   });
   let refreshInFlight: Promise<RemoteRevision> | undefined;
+  let startupCleanupComplete = false;
 
-  const runWithLoopbackProxyRetry = async (spec: CommandSpec) => {
+  const runWithLoopbackProxyRetry = async (
+    spec: CommandSpec,
+    beforeRetry?: () => Promise<void>,
+  ) => {
     try {
       return await options.runner.run(spec);
     } catch (error) {
@@ -72,11 +76,22 @@ export function createRepositoryCache(options: RepositoryCacheOptions): Reposito
       ) {
         throw error;
       }
+      await beforeRetry?.();
       return options.runner.run({
         ...spec,
         env: fallbackGitProxyEnv,
       });
     }
+  };
+
+  const cleanupPartialClone = async () => {
+    if (!existsSync(cacheRepoPath)) return;
+    const parent = dirname(cacheRepoPath);
+    const pathFromParent = relative(parent, cacheRepoPath);
+    if (!pathFromParent || pathFromParent.startsWith("..") || isAbsolute(pathFromParent)) {
+      throw new Error("Cache repository path is not safely owned");
+    }
+    await rm(cacheRepoPath, { recursive: true, force: true });
   };
 
   const git = (args: readonly string[], timeoutMs = 120_000, retryLoopbackProxy = false) => {
@@ -89,40 +104,62 @@ export function createRepositoryCache(options: RepositoryCacheOptions): Reposito
   };
 
   const performRefresh = async (): Promise<RemoteRevision> => {
+    if (!startupCleanupComplete) {
+      await mkdir(worktreeRoot, { recursive: true });
+      const entries = await readdir(worktreeRoot, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || !ULID_PATTERN.test(entry.name.toUpperCase())) continue;
+        const orphan = resolve(join(worktreeRoot, entry.name));
+        assertOwnedPath(worktreeRoot, orphan);
+        await rm(orphan, { recursive: true, force: true });
+      }
+      startupCleanupComplete = true;
+    }
     if (!existsSync(cacheRepoPath)) {
       await mkdir(dirname(cacheRepoPath), { recursive: true });
-      if (options.cloneUrl) {
-        await git(
-          [
-            "clone",
-            "--bare",
-            "--depth=1",
-            "--single-branch",
-            `--branch=${options.baseBranch}`,
-            options.cloneUrl,
-            cacheRepoPath,
-          ],
-          600_000,
-        );
-      } else {
-        const cloneSpec = {
-          executable: "gh",
-          args: [
-            "repo",
-            "clone",
-            options.targetSlug,
-            cacheRepoPath,
-            "--",
-            "--bare",
-            "--depth=1",
-            "--single-branch",
-            `--branch=${options.baseBranch}`,
-          ],
-          timeoutMs: 600_000,
-        } as const;
-        await runWithLoopbackProxyRetry(cloneSpec);
+      try {
+        if (options.cloneUrl) {
+          await runWithLoopbackProxyRetry(
+            {
+              executable: "git",
+              args: [
+                "clone",
+                "--bare",
+                "--depth=1",
+                "--single-branch",
+                `--branch=${options.baseBranch}`,
+                options.cloneUrl,
+                cacheRepoPath,
+              ],
+              timeoutMs: 600_000,
+            },
+            cleanupPartialClone,
+          );
+        } else {
+          const cloneSpec = {
+            executable: "gh",
+            args: [
+              "repo",
+              "clone",
+              options.targetSlug,
+              cacheRepoPath,
+              "--",
+              "--bare",
+              "--depth=1",
+              "--single-branch",
+              `--branch=${options.baseBranch}`,
+            ],
+            timeoutMs: 600_000,
+          } as const;
+          await runWithLoopbackProxyRetry(cloneSpec, cleanupPartialClone);
+        }
+      } catch (error) {
+        await cleanupPartialClone();
+        throw error;
       }
     }
+
+    await git(["-C", cacheRepoPath, "worktree", "prune"]);
 
     await git(
       [

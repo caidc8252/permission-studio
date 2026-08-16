@@ -9,9 +9,10 @@ describe("GET /api/model", () => {
     const handler = createModelHandler({
       load: async () => validModel as unknown as PermissionStudioModel,
       now: () => new Date("2026-08-16T09:00:00.000Z"),
+      expectedOrigin: "http://127.0.0.1:3100",
     });
 
-    const response = await handler();
+    const response = await handler(new Request("http://127.0.0.1:3100/api/model"));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -26,9 +27,10 @@ describe("GET /api/model", () => {
         throw new Error("failed in C:\\Users\\secret\\target");
       },
       now: () => new Date(),
+      expectedOrigin: "http://127.0.0.1:3100",
     });
 
-    const response = await handler();
+    const response = await handler(new Request("http://127.0.0.1:3100/api/model"));
     const body = await response.json();
 
     expect(response.status).toBe(503);

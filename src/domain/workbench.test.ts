@@ -39,4 +39,42 @@ describe("buildWorkbenchView", () => {
     expect(view.permissions.map((item) => item.code)).toEqual(["orders.manage", "orders.view"]);
     expect(model).toEqual(validModel);
   });
+
+  it("projects final modules from effective permissions instead of contracts alone", () => {
+    const memberWithoutRoles = buildWorkbenchView(model, {
+      membershipType: "MEMBER",
+      entitlements: [{ contractType: "ISO", plan: "STANDARD" }],
+      roleCodes: [],
+    });
+    const admin = buildWorkbenchView(model, {
+      membershipType: "ADMIN",
+      entitlements: [{ contractType: "ISO", plan: "STANDARD" }],
+      roleCodes: [],
+    });
+
+    expect(memberWithoutRoles.visibleMenus).toEqual([]);
+    expect(memberWithoutRoles.visibleWidgets).toEqual([]);
+    expect(admin.visibleMenus.map((item) => item.menuCode)).toEqual(["orders"]);
+  });
+
+  it("includes parent menus needed to render an effective child", () => {
+    const nested = structuredClone(model);
+    nested.menuRegistry.root = {
+      menuCode: "root",
+      title: "menu.root",
+      parentMenuCode: null,
+      path: "/",
+      icon: null,
+      order: 1,
+    };
+    nested.menuRegistry.orders.parentMenuCode = "root";
+
+    const view = buildWorkbenchView(nested, {
+      membershipType: "MEMBER",
+      entitlements: [{ contractType: "ISO", plan: "STANDARD" }],
+      roleCodes: ["preset_ops"],
+    });
+
+    expect(view.visibleMenus.map((item) => item.menuCode)).toEqual(["root", "orders"]);
+  });
 });

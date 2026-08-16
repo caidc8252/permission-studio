@@ -121,6 +121,34 @@ describe("permission source editor", () => {
     ).toThrow(/array/i);
   });
 
+  it("fails closed for duplicate owners, keys, and role codes", () => {
+    const request = {
+      owner: "GLOBAL_ROLES",
+      key: "preset_ops",
+      field: "permissionCodes",
+      add: ["b"],
+      remove: [],
+    };
+    expect(() =>
+      planSourceEdits(
+        'var GLOBAL_ROLES = []; var GLOBAL_ROLES = [{ code: "preset_ops", permissionCodes: ["a"] }];',
+        request,
+      ),
+    ).toThrow(/duplicate.*GLOBAL_ROLES/i);
+    expect(() =>
+      planSourceEdits(
+        'const GLOBAL_ROLES = [{ code: "preset_ops", code: "other", permissionCodes: ["a"] }];',
+        request,
+      ),
+    ).toThrow(/duplicate.*code/i);
+    expect(() =>
+      planSourceEdits(
+        'const GLOBAL_ROLES = [{ code: "preset_ops", permissionCodes: ["a"] }, { code: "preset_ops", permissionCodes: ["b"] }];',
+        request,
+      ),
+    ).toThrow(/duplicate.*role/i);
+  });
+
   it("rejects overlapping manual edits", () => {
     expect(() =>
       applySourceEdits("abcdef", [

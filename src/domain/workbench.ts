@@ -66,12 +66,32 @@ export function buildWorkbenchView(
     membershipType: scenario.membershipType,
   });
   const entitledContracts = new Set(scenario.entitlements.map(({ contractType }) => contractType));
-  const visibleMenuCodes = new Set(
+  const contractMenuCodes = new Set(
     [...entitledContracts].flatMap((contract) => model.contractMenus[contract] ?? []),
   );
+  const contractWidgetCodes = new Set(
+    [...entitledContracts].flatMap((contract) => model.contractWidgets[contract] ?? []),
+  );
+  const effectiveOwners = new Set(
+    result.effectiveCodes
+      .map((code) => model.permissionRegistry[code]?.belongToMenuCode)
+      .filter((owner): owner is string => Boolean(owner)),
+  );
+  const visibleMenuCodes = new Set(
+    [...effectiveOwners].filter((owner) => contractMenuCodes.has(owner)),
+  );
+  for (const menuCode of [...visibleMenuCodes]) {
+    let parent = model.menuRegistry[menuCode]?.parentMenuCode ?? null;
+    while (parent) {
+      visibleMenuCodes.add(parent);
+      parent = model.menuRegistry[parent]?.parentMenuCode ?? null;
+    }
+  }
   const visibleWidgets = [
     ...new Set([...entitledContracts].flatMap((contract) => model.contractWidgets[contract] ?? [])),
-  ].sort();
+  ]
+    .filter((widget) => contractWidgetCodes.has(widget) && effectiveOwners.has(widget))
+    .sort();
 
   return {
     permissions: model.permissionCodes

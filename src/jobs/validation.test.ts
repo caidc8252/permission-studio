@@ -18,11 +18,17 @@ describe("runTargetValidation", () => {
     const runner: CommandRunner = {
       async run(spec): Promise<CommandResult> {
         calls.push(spec);
+        const command = [spec.executable, ...spec.args].join(" ");
         return {
           exitCode: 0,
-          stdout: spec.args.includes("--binary")
-            ? "diff --git a/apps/web/manifest/catalog/roles.ts b/apps/web/manifest/catalog/roles.ts\n"
-            : "ok",
+          stdout:
+            command === "git status --porcelain=v1 --untracked-files=all"
+              ? " M apps/web/manifest/catalog/roles.ts\n"
+              : command === "git diff --cached --name-only"
+                ? ""
+                : spec.args.includes("--binary")
+                  ? "diff --git a/apps/web/manifest/catalog/roles.ts b/apps/web/manifest/catalog/roles.ts\n"
+                  : "ok",
           stderr: "",
           durationMs: 2,
         };
@@ -57,18 +63,66 @@ describe("runTargetValidation", () => {
       ],
       ["corepack", "pnpm", "typecheck"],
       ["git", "diff", "--check"],
-      [
-        "git",
-        "diff",
-        "--binary",
-        "--",
-        "apps/web/manifest/catalog/roles.ts",
-        "apps/web/manifest/catalog/contract-types.ts",
-      ],
+      ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+      ["git", "diff", "--cached", "--name-only"],
+      ["git", "diff", "--binary"],
     ]);
     expect(calls.every((call) => call.cwd === worktreePath)).toBe(true);
     expect(result.steps).toHaveLength(6);
     expect(result.diff).toContain("roles.ts");
+  });
+
+  it("rejects changes outside the approved catalogs", async () => {
+    const worktreeRoot = mkdtempSync(join(tmpdir(), "permission-validation-"));
+    roots.push(worktreeRoot);
+    const runner: CommandRunner = {
+      async run(spec): Promise<CommandResult> {
+        return {
+          exitCode: 0,
+          stdout: spec.args[0] === "status" ? " M package.json\n" : "",
+          stderr: "",
+          durationMs: 1,
+        };
+      },
+    };
+
+    await expect(
+      runTargetValidation({
+        runner,
+        worktreeRoot,
+        worktreePath: join(worktreeRoot, "owned"),
+        pnpmCommand: { executable: "corepack", argsPrefix: ["pnpm"] },
+      }),
+    ).rejects.toThrow(/unapproved path/i);
+  });
+
+  it("rejects files staged by validation scripts", async () => {
+    const worktreeRoot = mkdtempSync(join(tmpdir(), "permission-validation-"));
+    roots.push(worktreeRoot);
+    const runner: CommandRunner = {
+      async run(spec): Promise<CommandResult> {
+        return {
+          exitCode: 0,
+          stdout:
+            spec.args[0] === "status"
+              ? "M  apps/web/manifest/catalog/roles.ts\n"
+              : spec.args.includes("--cached")
+                ? "apps/web/manifest/catalog/roles.ts\n"
+                : "",
+          stderr: "",
+          durationMs: 1,
+        };
+      },
+    };
+
+    await expect(
+      runTargetValidation({
+        runner,
+        worktreeRoot,
+        worktreePath: join(worktreeRoot, "owned"),
+        pnpmCommand: { executable: "corepack", argsPrefix: ["pnpm"] },
+      }),
+    ).rejects.toThrow(/staged/i);
   });
 
   it("rejects a worktree outside the owned root before running commands", async () => {

@@ -46,6 +46,7 @@ interface ChangeJobServiceOptions {
   validate: (worktreePath: string) => Promise<ValidationResult>;
   now?: () => Date;
   nonce: () => string;
+  logFailure?: (requestId: string, phase: "prepare" | "finalize", error: unknown) => Promise<void>;
   finalization?: {
     runner: CommandRunner;
     getViewer: () => Promise<GhViewer>;
@@ -63,9 +64,11 @@ interface ChangeJobServiceOptions {
 
 export interface ChangeJobService {
   prepareChange(change: PermissionChange): Promise<PublicChangeJob>;
+  startPrepareChange(change: PermissionChange): Promise<PublicChangeJob>;
   getChangeJob(id: string): PublicChangeJob | null;
   discardPreparedChange(id: string): Promise<void>;
   finalizeChange(id: string, confirmationNonce: string): Promise<PublicChangeJob>;
+  startFinalizeChange(id: string, confirmationNonce: string): Promise<PublicChangeJob>;
   getInternalJob(id: string): ChangeJob | undefined;
 }
 
@@ -76,28 +79,42 @@ function diffPaths(diff: string): string[] {
   ]);
 }
 
+function porcelainPaths(status: string): string[] {
+  return status
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .flatMap((line) => {
+      const path = line.slice(3);
+      return path.includes(" -> ") ? path.split(" -> ") : [path];
+    });
+}
+
+function lines(value: string): string[] {
+  return value.split(/\r?\n/u).filter(Boolean);
+}
+
+function samePathSet(actual: readonly string[], expected: readonly string[]): boolean {
+  const normalized = (paths: readonly string[]) => [...new Set(paths)].sort();
+  return JSON.stringify(normalized(actual)) === JSON.stringify(normalized(expected));
+}
+
 export function createChangeJobService(options: ChangeJobServiceOptions): ChangeJobService {
   const now = options.now ?? (() => new Date());
-  let preparing = false;
+  let busy = false;
 
   const discardWorktree = async (worktree?: WorktreeHandle) => {
     if (worktree) await options.cache.removeWorktree(worktree);
   };
 
-  return {
+  const service: ChangeJobService = {
     async prepareChange(change) {
-      if (preparing) throw new ChangeJobError("PREPARE_BUSY", 409, "Another change is validating");
-      preparing = true;
+      if (busy) throw new ChangeJobError("OPERATION_BUSY", 409, "Another change is in progress");
+      if (options.store.get(change.requestId)) {
+        throw new ChangeJobError("CHANGE_EXISTS", 409, "Change request already exists");
+      }
+      busy = true;
       let job: ChangeJob | undefined;
       try {
-        const revision = await options.cache.refresh();
-        if (revision.sha !== change.baseSha) {
-          throw new ChangeJobError("STALE_MODEL", 409, "develop changed; refresh the model");
-        }
-        if (options.store.get(change.requestId)) {
-          throw new ChangeJobError("CHANGE_EXISTS", 409, "Change request already exists");
-        }
-        const worktree = await options.cache.createWorktree(change.requestId, revision.sha);
         const createdAt = now();
         job = {
           requestId: change.requestId,
@@ -110,8 +127,14 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
           touchedFiles: [],
           validationSteps: [],
           diff: "",
-          worktree,
         };
+        options.store.set(job);
+        const revision = await options.cache.refresh();
+        if (revision.sha !== change.baseSha) {
+          throw new ChangeJobError("STALE_MODEL", 409, "develop changed; refresh the model");
+        }
+        const worktree = await options.cache.createWorktree(change.requestId, revision.sha);
+        job.worktree = worktree;
         options.store.set(job);
         const applied = await options.applyChange(worktree.path, change);
         if (applied.touchedFiles.some((path) => !ALLOWED_CATALOG_PATHS.includes(path))) {
@@ -139,20 +162,25 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
         options.store.set(job);
         return toPublicChangeJob(job);
       } catch (error) {
+        await options.logFailure?.(change.requestId, "prepare", error).catch(() => undefined);
         if (job) {
-          await discardWorktree(job.worktree).catch(() => undefined);
-          job.worktree = undefined;
           job.state = "failed";
           job.errorCode = error instanceof ChangeJobError ? error.code : "PREPARE_FAILED";
-          job.diff = "";
-          job.validationSteps = [];
           options.store.set(job);
         }
         if (error instanceof ChangeJobError) throw error;
         throw new ChangeJobError("PREPARE_FAILED", 422, "Permission change validation failed");
       } finally {
-        preparing = false;
+        busy = false;
       }
+    },
+
+    async startPrepareChange(change) {
+      const pending = service.prepareChange(change);
+      const job = options.store.get(change.requestId);
+      if (!job) return pending;
+      void pending.catch(() => undefined);
+      return toPublicChangeJob(job);
     },
 
     getChangeJob(id) {
@@ -202,7 +230,9 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
       if (!options.finalization || !job.worktree) {
         throw new ChangeJobError("FINALIZATION_UNAVAILABLE", 503, "Finalization is unavailable");
       }
+      if (busy) throw new ChangeJobError("OPERATION_BUSY", 409, "Another change is in progress");
 
+      busy = true;
       job.state = "finalizing";
       job.confirmationNonce = "";
       options.store.set(job);
@@ -212,7 +242,6 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
         if (revision.sha !== job.change.baseSha) {
           throw new ChangeJobError("STALE_MODEL", 409, "develop changed after validation");
         }
-        const viewer = await options.finalization.getViewer();
         const git = (
           args: readonly string[],
           timeoutMs = 120_000,
@@ -226,10 +255,45 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
             maxOutputBytes: 4 * 1024 * 1024,
             ...(env ? { env } : {}),
           });
+        const approved = new Set<string>(ALLOWED_CATALOG_PATHS);
+        const status = await git(["status", "--porcelain=v1", "--untracked-files=all"]);
+        if (porcelainPaths(status.stdout).some((path) => !approved.has(path))) {
+          throw new ChangeJobError("UNAPPROVED_DIFF", 422, "Worktree contains an unapproved path");
+        }
+        const existingIndex = await git(["diff", "--cached", "--name-only"]);
+        if (existingIndex.stdout.trim()) {
+          throw new ChangeJobError("DIRTY_INDEX", 422, "Worktree index is not empty");
+        }
+        const currentDiff = await git(["diff", "--binary"]);
+        if (currentDiff.stdout !== job.diff) {
+          throw new ChangeJobError(
+            "FINALIZE_DIFF_MISMATCH",
+            409,
+            "Worktree diff no longer matches the confirmed diff",
+          );
+        }
+
+        const viewer = await options.finalization.getViewer();
         await git(["config", "user.name", viewer.login]);
         await git(["config", "user.email", viewer.noreplyEmail]);
         await git(["switch", "-c", job.branchName]);
         await git(["add", "--", ...ALLOWED_CATALOG_PATHS]);
+        const stagedPaths = await git(["diff", "--cached", "--name-only"]);
+        if (!samePathSet(lines(stagedPaths.stdout), job.touchedFiles)) {
+          throw new ChangeJobError(
+            "FINALIZE_DIFF_MISMATCH",
+            409,
+            "Staged paths no longer match the confirmed change",
+          );
+        }
+        const stagedDiff = await git(["diff", "--cached", "--binary"]);
+        if (stagedDiff.stdout !== job.diff) {
+          throw new ChangeJobError(
+            "FINALIZE_DIFF_MISMATCH",
+            409,
+            "Staged diff no longer matches the confirmed diff",
+          );
+        }
         await git(["commit", "-m", "chore(permissions): apply Permission Studio change"]);
         await git(
           ["push", "origin", `HEAD:refs/heads/${job.branchName}`],
@@ -259,8 +323,7 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
         options.store.set(job);
         return toPublicChangeJob(job);
       } catch (error) {
-        await discardWorktree(job.worktree).catch(() => undefined);
-        job.worktree = undefined;
+        await options.logFailure?.(job.requestId, "finalize", error).catch(() => undefined);
         job.state = "failed";
         const failure =
           error instanceof ChangeJobError
@@ -276,11 +339,22 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
         }
         options.store.set(job);
         throw failure;
+      } finally {
+        busy = false;
       }
+    },
+
+    async startFinalizeChange(id, confirmationNonce) {
+      const pending = service.finalizeChange(id, confirmationNonce);
+      const job = options.store.get(id);
+      if (!job || (job.state !== "finalizing" && job.state !== "completed")) return pending;
+      void pending.catch(() => undefined);
+      return toPublicChangeJob(job);
     },
 
     getInternalJob(id) {
       return options.store.get(id);
     },
   };
+  return service;
 }

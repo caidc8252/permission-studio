@@ -27,7 +27,8 @@ const statusLabels = {
 async function loadRemoteModel(): Promise<PermissionStudioModel> {
   const response = await fetch("/api/model", { cache: "no-store" });
   if (!response.ok) throw new Error("Permission model request failed");
-  return permissionStudioModelSchema.parse(await response.json());
+  const body = (await response.json()) as { data?: unknown };
+  return permissionStudioModelSchema.parse(body.data);
 }
 
 function defaultSelections(model: PermissionStudioModel) {
@@ -44,7 +45,7 @@ function defaultSelections(model: PermissionStudioModel) {
 export function PermissionWorkbench({
   initialModel = null,
   loadModel = loadRemoteModel,
-  onPrepare = () => undefined,
+  onPrepare,
 }: PermissionWorkbenchProps) {
   const initialSelections = initialModel ? defaultSelections(initialModel) : null;
   const [model, setModel] = useState<PermissionStudioModel | null>(initialModel);
@@ -270,6 +271,12 @@ export function PermissionWorkbench({
                   {statusLabels[permission.status]}
                 </span>
                 <p>{permission.description}</p>
+                <p className="permission-evidence" aria-label={`${permission.code} evidence`}>
+                  Contracts: {permission.decision.grantingContracts.join(", ") || "none"} · Roles:{" "}
+                  {permission.decision.grantingRoles.join(", ") || "none"} · Plan blocked:{" "}
+                  {permission.decision.blockedByPlan ? "yes" : "no"} · Admin bypass:{" "}
+                  {permission.decision.bypassedByAdminMembership ? "yes" : "no"}
+                </p>
               </li>
             ))}
           </ul>

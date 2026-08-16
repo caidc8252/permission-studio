@@ -51,6 +51,7 @@
 ### Task 1: Standalone project foundation and bounded command runner
 
 **Files:**
+
 - Create: <code>package.json</code>
 - Create: <code>pnpm-lock.yaml</code>
 - Create: <code>tsconfig.json</code>
@@ -69,13 +70,14 @@
 - Test: <code>src/system/command-runner.test.ts</code>
 
 **Interfaces:**
+
 - Produces: <code>studioConfig</code>, <code>CommandSpec</code>, <code>CommandResult</code>, <code>CommandRunner</code>, and <code>createCommandRunner()</code>.
 
 - [ ] **Step 1: Scaffold package metadata and test configuration**
 
 Use exact runtime scripts and dependencies:
 
-~~~json
+```json
 {
   "name": "permission-studio",
   "version": "0.1.0",
@@ -93,13 +95,13 @@ Use exact runtime scripts and dependencies:
     "format:check": "prettier --check ."
   }
 }
-~~~
+```
 
 Install Next 16, React 19, Zod 4, Babel parser, TypeScript 5, Vitest 4, jsdom, Testing Library, ESLint, and Prettier with <code>corepack pnpm install</code>.
 
 - [ ] **Step 2: Write failing configuration and runner tests**
 
-~~~ts
+```ts
 expect(studioConfig.target).toEqual({
   owner: "Newland-Payment-Technology-US-Co-Ltd",
   repo: "pep-webapp",
@@ -107,9 +109,7 @@ expect(studioConfig.target).toEqual({
   branchPrefix: "permission-studio/",
 });
 expect(studioConfig.cacheRoot.startsWith(process.env.LOCALAPPDATA!)).toBe(true);
-expect(studioConfig.cacheRepoPath).toBe(
-  join(studioConfig.cacheRoot, "cache", "pep-webapp.git"),
-);
+expect(studioConfig.cacheRepoPath).toBe(join(studioConfig.cacheRoot, "cache", "pep-webapp.git"));
 expect(studioConfig.worktreeRoot).toBe(join(studioConfig.cacheRoot, "worktrees"));
 expect(studioConfig.logRoot).toBe(join(studioConfig.cacheRoot, "logs"));
 
@@ -119,7 +119,7 @@ const result = await runner.run({
   timeoutMs: 5_000,
 });
 expect(result).toMatchObject({ exitCode: 0, stdout: "ok" });
-~~~
+```
 
 - [ ] **Step 3: Run tests and verify RED**
 
@@ -129,7 +129,7 @@ Expected: FAIL because the modules do not exist.
 
 - [ ] **Step 4: Implement immutable configuration and command execution**
 
-~~~ts
+```ts
 export interface CommandSpec {
   executable: string;
   args: readonly string[];
@@ -149,7 +149,7 @@ export interface CommandResult {
 export interface CommandRunner {
   run(spec: CommandSpec): Promise<CommandResult>;
 }
-~~~
+```
 
 The runner must set <code>shell: false</code>, cap stdout/stderr independently, kill timed-out children, omit inherited token-like variables from error serialization, and throw a typed <code>CommandExecutionError</code> for non-zero exits.
 
@@ -161,11 +161,11 @@ Render the product name, localhost-only notice, and a server-rendered static hea
 
 Run:
 
-~~~text
+```text
 corepack pnpm test
 corepack pnpm typecheck
 corepack pnpm build
-~~~
+```
 
 Expected: PASS.
 
@@ -176,17 +176,19 @@ Commit: <code>feat: scaffold standalone permission studio</code>
 ### Task 2: Effective-permission domain engine
 
 **Files:**
+
 - Create: <code>src/domain/model.ts</code>
 - Create: <code>src/domain/effective-permissions.ts</code>
 - Test: <code>src/domain/effective-permissions.test.ts</code>
 
 **Interfaces:**
+
 - Consumes: <code>ContractEntitlement</code>, role inputs, contract scopes, and plan policies.
 - Produces: <code>explainEffectivePermissions(input): EffectivePermissionResult</code>.
 
 - [ ] **Step 1: Write failing contract, role, plan, and ADMIN vectors**
 
-~~~ts
+```ts
 const member = explainEffectivePermissions({
   permissionCodes: ["orders.view", "orders.manage"],
   contractScope: { ISO: ["orders.view", "orders.manage"] },
@@ -207,7 +209,7 @@ expect(member.decisions["orders.manage"]).toMatchObject({
   contractGranted: false,
   blockedByPlan: true,
 });
-~~~
+```
 
 Add multi-contract, unknown-plan, empty-role, duplicate-input, immutability, and ADMIN cases. ADMIN must bypass roles but remain constrained by contract and plan scope.
 
@@ -219,11 +221,11 @@ Expected: FAIL because the evaluator does not exist.
 
 - [ ] **Step 3: Implement deterministic explanations**
 
-~~~ts
+```ts
 export function explainEffectivePermissions(
   input: EffectivePermissionInput,
 ): EffectivePermissionResult;
-~~~
+```
 
 Produce one decision per known permission with sorted <code>grantingContracts</code>, <code>grantingRoles</code>, <code>roleGranted</code>, <code>contractGranted</code>, <code>blockedByPlan</code>, <code>bypassedByAdminMembership</code>, and <code>effective</code>. Never mutate inputs.
 
@@ -240,6 +242,7 @@ Commit: <code>feat(domain): explain effective permissions</code>
 ### Task 3: Strict model, change protocol, and immutable drafts
 
 **Files:**
+
 - Modify: <code>src/domain/model.ts</code>
 - Create: <code>src/domain/change.ts</code>
 - Create: <code>src/domain/draft.ts</code>
@@ -248,11 +251,12 @@ Commit: <code>feat(domain): explain effective permissions</code>
 - Test: <code>src/domain/draft.test.ts</code>
 
 **Interfaces:**
+
 - Produces: <code>permissionStudioModelSchema</code>, <code>permissionChangeSchema</code>, <code>normalizePermissionChange()</code>, <code>createEmptyDraft()</code>, <code>toggleRolePermission()</code>, <code>toggleContractOwner()</code>, <code>applyDraftToModel()</code>, and <code>buildImpactDiff()</code>.
 
 - [ ] **Step 1: Write failing strict-boundary tests**
 
-~~~ts
+```ts
 expect(() => permissionStudioModelSchema.parse(validModel)).not.toThrow();
 expect(() => permissionStudioModelSchema.parse({ ...validModel, sourceSha: "short" })).toThrow();
 expect(() => permissionStudioModelSchema.parse({ ...validModel, unknown: true })).toThrow();
@@ -263,19 +267,19 @@ expect(() =>
     roleChanges: [{ roleCode: "preset_ops", add: ["orders.view"], remove: ["orders.view"] }],
   }),
 ).toThrow(/both add and remove/);
-~~~
+```
 
 Assert a 40-character lowercase SHA, ULID request ID, reason length 8-500, bounded arrays, no control characters, no empty final change, no <code>TEST</code> edit, preset role prefix, normalization sorting, and deduplication.
 
 - [ ] **Step 2: Write failing immutable draft tests**
 
-~~~ts
+```ts
 const next = toggleRolePermission(createEmptyDraft(), model, "preset_ops", "orders.view");
 expect(model.roles[0].permissionCodes).toEqual(original);
 expect(buildImpactDiff(model, next).addedRolePermissions).toEqual([
   { roleCode: "preset_ops", code: "orders.view" },
 ]);
-~~~
+```
 
 - [ ] **Step 3: Run and verify RED**
 
@@ -300,18 +304,20 @@ Commit: <code>feat(domain): define permission changes and drafts</code>
 ### Task 4: Local GitHub CLI preflight
 
 **Files:**
+
 - Create: <code>src/github/gh-client.ts</code>
 - Create: <code>src/github/gh-client.test.ts</code>
 - Create: <code>app/api/health/route.ts</code>
 - Modify: <code>app/page.tsx</code>
 
 **Interfaces:**
+
 - Consumes: <code>CommandRunner</code> and <code>studioConfig.target</code>.
 - Produces: <code>GhClient</code>, <code>GhPreflight</code>, <code>createGhClient()</code>, and <code>GET /api/health</code>.
 
 - [ ] **Step 1: Write failing adapter tests with a fake runner**
 
-~~~ts
+```ts
 const preflight = await client.preflight();
 expect(fake.calls).toEqual([
   ["gh", ["auth", "status", "--hostname", "github.com"]],
@@ -328,7 +334,7 @@ expect(fake.calls).toEqual([
   ],
 ]);
 expect(preflight).toMatchObject({ login: "caidc8252", canWrite: true });
-~~~
+```
 
 Cover missing executable, unauthenticated user, inaccessible repository, read-only permission, malformed JSON, timeout, and stderr redaction.
 
@@ -342,13 +348,13 @@ Expected: FAIL because the adapter does not exist.
 
 Use <code>gh api user</code> for the login/id and <code>gh repo view</code> for access. Never invoke <code>gh auth token</code>. Map <code>WRITE</code>, <code>MAINTAIN</code>, and <code>ADMIN</code> to <code>canWrite: true</code>.
 
-~~~ts
+```ts
 export interface GhViewer {
   login: string;
   id: number;
   noreplyEmail: string;
 }
-~~~
+```
 
 - [ ] **Step 4: Expose health and render actionable setup**
 
@@ -358,11 +364,11 @@ The endpoint returns executable availability, authentication, login, repository 
 
 Run:
 
-~~~text
+```text
 corepack pnpm vitest run src/github/gh-client.test.ts
 corepack pnpm typecheck
 corepack pnpm build
-~~~
+```
 
 Expected: PASS.
 
@@ -373,17 +379,19 @@ Commit: <code>feat(github): check local gh access</code>
 ### Task 5: Isolated target repository cache and worktrees
 
 **Files:**
+
 - Create: <code>src/git/repository-cache.ts</code>
 - Test: <code>src/git/repository-cache.test.ts</code>
 - Create: <code>tests/helpers/git-fixture.ts</code>
 
 **Interfaces:**
+
 - Consumes: <code>CommandRunner</code> and <code>studioConfig</code>.
 - Produces: <code>RepositoryCache</code>, <code>refresh(): Promise&lt;RemoteRevision&gt;</code>, <code>createWorktree(requestId, sha)</code>, and <code>removeWorktree(handle)</code>.
 
 - [ ] **Step 1: Write failing tests against a temporary local bare remote**
 
-~~~ts
+```ts
 const revision = await cache.refresh();
 expect(revision.sha).toMatch(/^[0-9a-f]{40}$/);
 expect(revision.ref).toBe("refs/remotes/origin/develop");
@@ -392,7 +400,7 @@ const worktree = await cache.createWorktree(requestId, revision.sha);
 expect(await readFile(join(worktree.path, "fixture.txt"), "utf8")).toBe("develop\n");
 await cache.removeWorktree(worktree);
 expect(existsSync(worktree.path)).toBe(false);
-~~~
+```
 
 Cover first clone, repeated fetch, concurrent refresh serialization, invalid request IDs, non-owned cleanup paths, stale handles, and failure cleanup.
 
@@ -406,7 +414,7 @@ Expected: FAIL because the cache does not exist.
 
 For production, clone with:
 
-~~~ts
+```ts
 await runner.run({
   executable: "gh",
   args: [
@@ -444,7 +452,7 @@ await runner.run({
   ],
   timeoutMs: 120_000,
 });
-~~~
+```
 
 The test fixture injects a local remote URL. Resolve and verify all paths before recursive cleanup. Do not use <code>git reset --hard</code> in a user checkout.
 
@@ -461,6 +469,7 @@ Commit: <code>feat(git): manage isolated pep-webapp worktrees</code>
 ### Task 6: Authoritative remote permission-model extraction
 
 **Files:**
+
 - Create: <code>src/pep-webapp/build-model.ts</code>
 - Create: <code>src/pep-webapp/export-model.mjs</code>
 - Create: <code>src/pep-webapp/model-loader.ts</code>
@@ -471,12 +480,13 @@ Commit: <code>feat(git): manage isolated pep-webapp worktrees</code>
 - Create: <code>scripts/smoke-model.ts</code>
 
 **Interfaces:**
+
 - Consumes: exact target SHA and a detached repository worktree.
 - Produces: <code>buildPermissionStudioModel(input)</code>, <code>loadRemotePermissionModel()</code>, and <code>GET /api/model</code>.
 
 - [ ] **Step 1: Write failing pure model-builder tests**
 
-~~~ts
+```ts
 const model = buildPermissionStudioModel({
   sourceSha,
   registry,
@@ -490,7 +500,7 @@ const model = buildPermissionStudioModel({
 });
 expect(model.permissionCodes).toEqual(["orders.manage", "orders.view"]);
 expect(model.contractScope.ISO).toEqual(["orders.manage", "orders.view"]);
-~~~
+```
 
 Cover deterministic sorting, availability narrowing, TEST bypass, widget-owned permissions, translation flattening, and invalid catalog references.
 
@@ -508,11 +518,11 @@ Expected: FAIL because the model extractor does not exist.
 
 The bridge dynamically imports, from the checked-out target root:
 
-~~~text
+```text
 apps/web/manifest/collect.ts
 packages/platform-config/src/coc/index.ts
 packages/platform-config/src/role-id.ts
-~~~
+```
 
 It calls the target repository's own <code>buildRegistry</code>, <code>validateCatalog</code>, <code>validatePermissionAvailability</code>, <code>deriveContractScope</code>, <code>validateContractPlanPolicies</code>, and role validators. It loads module/catalog translations for <code>en</code>, <code>zh-CN</code>, and <code>ja</code>. Any error diagnostic rejects the model.
 
@@ -524,12 +534,12 @@ The API returns the validated model plus refresh time. An unauthenticated/inacce
 
 Run:
 
-~~~text
+```text
 corepack pnpm vitest run src/pep-webapp
 corepack pnpm typecheck
 corepack pnpm build
 corepack pnpm exec tsx scripts/smoke-model.ts
-~~~
+```
 
 Expected: unit tests, typecheck, and build PASS; smoke command reads <code>origin/develop</code>, prints counts and SHA, and performs no remote write.
 
@@ -540,6 +550,7 @@ Commit: <code>feat(model): load permissions from remote develop</code>
 ### Task 7: Read-only permission workbench
 
 **Files:**
+
 - Create: <code>src/domain/workbench.ts</code>
 - Test: <code>src/domain/workbench.test.ts</code>
 - Create: <code>src/components/permission-workbench.tsx</code>
@@ -548,12 +559,13 @@ Commit: <code>feat(model): load permissions from remote develop</code>
 - Modify: <code>app/globals.css</code>
 
 **Interfaces:**
+
 - Consumes: validated <code>PermissionStudioModel</code>.
 - Produces: <code>buildWorkbenchView()</code> and a three-column responsive workbench.
 
 - [ ] **Step 1: Write failing projection tests**
 
-~~~ts
+```ts
 const view = buildWorkbenchView(model, {
   membershipType: "MEMBER",
   entitlements: [{ contractType: "US-ISO", plan: "STANDARD" }],
@@ -561,7 +573,7 @@ const view = buildWorkbenchView(model, {
 });
 expect(view.permissions.some((item) => item.status === "plan-blocked")).toBe(true);
 expect(view.visibleMenus.map((item) => item.menuCode)).toContain("orders");
-~~~
+```
 
 - [ ] **Step 2: Write failing component tests**
 
@@ -581,11 +593,11 @@ Localize from <code>zh-CN</code> with code fallback. Keep simulation state clien
 
 Run:
 
-~~~text
+```text
 corepack pnpm vitest run src/domain/workbench.test.ts src/components/permission-workbench.test.tsx
 corepack pnpm typecheck
 corepack pnpm build
-~~~
+```
 
 Expected: PASS.
 
@@ -596,23 +608,25 @@ Commit: <code>feat(ui): add permission workbench</code>
 ### Task 8: Supported editing and impact diff
 
 **Files:**
+
 - Create: <code>src/components/change-draft.tsx</code>
 - Test: <code>src/components/change-draft.test.tsx</code>
 - Modify: <code>src/components/permission-workbench.tsx</code>
 
 **Interfaces:**
+
 - Consumes: domain draft helpers and <code>PermissionChange</code>.
 - Produces: editable role/contract controls that emit a normalized prepare intent through an injected <code>onPrepare</code> callback.
 
 - [ ] **Step 1: Write failing editor tests**
 
-~~~ts
+```ts
 await user.click(screen.getByLabelText("角色 preset_iso_ops 的 orders.view"));
 expect(screen.getByText("角色授权 +1 / -0")).toBeVisible();
 expect(screen.getByRole("button", { name: "验证变更" })).toBeDisabled();
 await user.type(screen.getByLabelText("变更原因"), "为运营角色增加订单查看能力");
 expect(screen.getByRole("button", { name: "验证变更" })).toBeEnabled();
-~~~
+```
 
 Assert TEST is absent, non-preset roles are absent, undo restores the baseline, stale models disable prepare, and impact counts cover roles, menus, widgets, and affected scenarios.
 
@@ -639,6 +653,7 @@ Commit: <code>feat(ui): prepare permission change drafts</code>
 ### Task 9: Comment-preserving pep-webapp AST editor
 
 **Files:**
+
 - Create: <code>src/pep-webapp/source-editor.mjs</code>
 - Create: <code>src/pep-webapp/apply-change.mjs</code>
 - Test: <code>src/pep-webapp/source-editor.test.ts</code>
@@ -646,6 +661,7 @@ Commit: <code>feat(ui): prepare permission change drafts</code>
 - Create: <code>tests/fixtures/pep-webapp/source-editor/</code>
 
 **Interfaces:**
+
 - Consumes: normalized <code>PermissionChange</code> and detached target worktree.
 - Produces: <code>planSourceEdits()</code>, <code>applySourceEdits()</code>, and <code>applyPermissionChange()</code>.
 
@@ -665,7 +681,7 @@ Cover:
 - atomicity when the second requested edit is unsupported;
 - idempotent second application.
 
-~~~ts
+```ts
 const plan = planSourceEdits(source, {
   owner: "GLOBAL_ROLES",
   key: "preset_ops",
@@ -675,7 +691,7 @@ const plan = planSourceEdits(source, {
 });
 expect(applySourceEdits(source, plan)).toContain('"orders.view"');
 expect(source).toContain("// preserved");
-~~~
+```
 
 - [ ] **Step 2: Run and verify RED**
 
@@ -700,6 +716,7 @@ Commit: <code>feat(pep): apply permission catalogs safely</code>
 ### Task 10: Prepare-time validation and final diff
 
 **Files:**
+
 - Create: <code>src/jobs/validation.ts</code>
 - Create: <code>src/jobs/change-job-store.ts</code>
 - Create: <code>src/jobs/change-job-service.ts</code>
@@ -710,6 +727,7 @@ Commit: <code>feat(pep): apply permission catalogs safely</code>
 - Create: <code>app/api/changes/[id]/route.ts</code>
 
 **Interfaces:**
+
 - Consumes: repository cache, model loader, source editor, command runner, and normalized change.
 - Produces: <code>prepareChange()</code>, <code>getChangeJob()</code>, <code>discardPreparedChange()</code>, and a prepared result containing exact diff and validation steps.
 
@@ -717,7 +735,7 @@ Commit: <code>feat(pep): apply permission catalogs safely</code>
 
 Assert this ordered target sequence:
 
-~~~text
+```text
 corepack pnpm install --frozen-lockfile
 corepack pnpm gen:coc
 corepack pnpm prettier --write apps/web/manifest/catalog/roles.ts apps/web/manifest/catalog/contract-types.ts
@@ -725,7 +743,7 @@ corepack pnpm vitest run apps/web/manifest/catalog/roles.test.ts apps/web/manife
 corepack pnpm typecheck
 git diff --check
 git diff --binary -- apps/web/manifest/catalog/roles.ts apps/web/manifest/catalog/contract-types.ts
-~~~
+```
 
 No command may include a user-controlled executable, a shell fragment, or a path outside the owned worktree.
 
@@ -733,10 +751,10 @@ No command may include a user-controlled executable, a shell fragment, or a path
 
 Cover exact SHA success, stale SHA before worktree creation, one global prepare lock, source editor failure, validation failure, diff containing an unapproved path, cleanup on discard, expiry cleanup, and state transitions:
 
-~~~text
+```text
 draft -> validating -> awaiting-confirmation
                   \-> failed
-~~~
+```
 
 - [ ] **Step 3: Write failing prepare route tests**
 
@@ -760,11 +778,11 @@ Store only bounded metadata, validation output summaries, diff, and owned worktr
 
 Run:
 
-~~~text
+```text
 corepack pnpm vitest run src/jobs app/api/changes
 corepack pnpm typecheck
 corepack pnpm build
-~~~
+```
 
 Expected: PASS.
 
@@ -775,6 +793,7 @@ Commit: <code>feat(jobs): validate permission changes before push</code>
 ### Task 11: Final confirmation, push, and Draft PR
 
 **Files:**
+
 - Modify: <code>src/github/gh-client.ts</code>
 - Modify: <code>src/jobs/change-job-service.ts</code>
 - Create: <code>src/github/pr-body.ts</code>
@@ -784,6 +803,7 @@ Commit: <code>feat(jobs): validate permission changes before push</code>
 - Test: <code>app/api/changes/[id]/confirm/route.test.ts</code>
 
 **Interfaces:**
+
 - Consumes: an unexpired <code>awaiting-confirmation</code> job.
 - Produces: <code>finalizeChange()</code> and a Draft PR URL.
 
@@ -816,25 +836,13 @@ Expected: FAIL because finalization does not exist.
 
 Use these operations without shell interpolation:
 
-~~~ts
+```ts
 await git(worktree.path, ["config", "user.name", viewer.login]);
-await git(worktree.path, [
-  "config",
-  "user.email",
-  viewer.noreplyEmail,
-]);
+await git(worktree.path, ["config", "user.email", viewer.noreplyEmail]);
 await git(worktree.path, ["switch", "-c", job.branchName]);
 await git(worktree.path, ["add", "--", ...ALLOWED_CATALOG_PATHS]);
-await git(worktree.path, [
-  "commit",
-  "-m",
-  "chore(permissions): apply Permission Studio change",
-]);
-await git(worktree.path, [
-  "push",
-  "origin",
-  "HEAD:refs/heads/" + job.branchName,
-]);
+await git(worktree.path, ["commit", "-m", "chore(permissions): apply Permission Studio change"]);
+await git(worktree.path, ["push", "origin", "HEAD:refs/heads/" + job.branchName]);
 await gh([
   "pr",
   "create",
@@ -850,7 +858,7 @@ await gh([
   "--body-file",
   job.prBodyPath,
 ]);
-~~~
+```
 
 - [ ] **Step 5: Implement confirmation boundary**
 
@@ -860,11 +868,11 @@ Require same-origin POST and an opaque confirmation nonce issued with the prepar
 
 Run:
 
-~~~text
+```text
 corepack pnpm vitest run src/github src/jobs app/api/changes
 corepack pnpm typecheck
 corepack pnpm build
-~~~
+```
 
 Expected: PASS.
 
@@ -875,6 +883,7 @@ Commit: <code>feat(github): create validated draft pull requests</code>
 ### Task 12: End-to-end UI integration without browser E2E
 
 **Files:**
+
 - Modify: <code>src/components/change-draft.tsx</code>
 - Modify: <code>src/components/permission-workbench.tsx</code>
 - Modify: <code>app/page.tsx</code>
@@ -883,13 +892,14 @@ Commit: <code>feat(github): create validated draft pull requests</code>
 - Create: <code>README.md</code>
 
 **Interfaces:**
+
 - Connects the previously tested model, prepare, poll, confirm, discard, and recovery interfaces.
 
 - [ ] **Step 1: Write failing component orchestration tests**
 
 Mock fetch only at the HTTP boundary and assert:
 
-~~~text
+```text
 refresh model
 edit role or contract owner
 submit reason
@@ -899,7 +909,7 @@ render exact diff and validation results
 confirm remote write
 poll succeeded
 render Draft PR link
-~~~
+```
 
 Also assert stale, validation failure, discarded, expired, push-failed, and PR-create-failed recovery states.
 
@@ -917,14 +927,14 @@ Never label the initial action “创建 PR”; use “验证变更”. Only the
 
 README must include:
 
-~~~text
+```text
 corepack enable
 gh auth login
 gh auth setup-git
 gh auth status
 corepack pnpm install
 corepack pnpm dev
-~~~
+```
 
 Document cache location, exact target/base, permissions required of the current user, no-token guarantee, stale-draft behavior, branch cleanup, PR failure recovery, no-E2E decision, and future GitHub App migration boundary.
 
@@ -932,7 +942,7 @@ Document cache location, exact target/base, permissions required of the current 
 
 Run:
 
-~~~text
+```text
 corepack pnpm format:check
 corepack pnpm lint
 corepack pnpm typecheck
@@ -940,7 +950,7 @@ corepack pnpm test
 corepack pnpm build
 corepack pnpm exec tsx scripts/smoke-model.ts
 git diff --check
-~~~
+```
 
 Expected: all automated commands PASS. The smoke command is read-only and reports the current remote <code>develop</code> SHA plus permission, contract, and role counts.
 
