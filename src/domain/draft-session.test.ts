@@ -40,6 +40,37 @@ describe("draft sessions", () => {
     ).toBeNull();
   });
 
+  it("rejects a stored override for a non-preset role", () => {
+    expect(
+      restoreDraftSession(
+        JSON.stringify({
+          version: 1,
+          sourceSha: model.sourceSha,
+          draft: {
+            ...createEmptyDraft(),
+            rolePermissions: { custom_admin: ["orders.view"] },
+          },
+        }),
+        model.sourceSha,
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects stored menu or widget overrides for TEST", () => {
+    for (const field of ["contractMenus", "contractWidgets"] as const) {
+      expect(
+        restoreDraftSession(
+          JSON.stringify({
+            version: 1,
+            sourceSha: model.sourceSha,
+            draft: { ...createEmptyDraft(), [field]: { TEST: [] } },
+          }),
+          model.sourceSha,
+        ),
+      ).toBeNull();
+    }
+  });
+
   it("replays valid codes and reports removed references", () => {
     const draftWithOrdersManage = setRolePermissionMembership(
       createEmptyDraft(),

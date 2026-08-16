@@ -10,10 +10,14 @@ import type { PermissionStudioModel } from "@/src/domain/model";
 
 const identifierSchema = z.string().min(1).max(200);
 const identifierArraySchema = z.array(identifierSchema).max(2_000);
+const editableRoleCodeSchema = identifierSchema.regex(/^preset_/);
+const editableContractTypeSchema = identifierSchema.refine((value) => value !== "TEST", {
+  message: "TEST is read-only",
+});
 const draftSchema = z.strictObject({
-  rolePermissions: z.record(identifierSchema, identifierArraySchema),
-  contractMenus: z.record(identifierSchema, identifierArraySchema),
-  contractWidgets: z.record(identifierSchema, identifierArraySchema),
+  rolePermissions: z.record(editableRoleCodeSchema, identifierArraySchema),
+  contractMenus: z.record(editableContractTypeSchema, identifierArraySchema),
+  contractWidgets: z.record(editableContractTypeSchema, identifierArraySchema),
 });
 const sourceShaSchema = z
   .string()
