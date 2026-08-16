@@ -34,6 +34,44 @@ function toggle(values: readonly string[], value: string): string[] {
   return [...next].sort();
 }
 
+function sameValues(left: readonly string[], right: readonly string[]): boolean {
+  return JSON.stringify(sortedUnique(left)) === JSON.stringify(sortedUnique(right));
+}
+
+function editableRole(model: PermissionStudioModel, roleCode: string) {
+  const role = model.roles.find((candidate) => candidate.code === roleCode);
+  if (!role) throw new Error(`Unknown role "${roleCode}"`);
+  if (!role.code.startsWith("preset_")) {
+    throw new Error(`Role "${roleCode}" is not a preset role`);
+  }
+  return role;
+}
+
+function editableContract(model: PermissionStudioModel, contractType: string): void {
+  if (!model.contractTypes.includes(contractType)) {
+    throw new Error(`Unknown contract "${contractType}"`);
+  }
+  if (contractType === "TEST") throw new Error("TEST is read-only");
+}
+
+function validateContractOwner(
+  model: PermissionStudioModel,
+  kind: "menu" | "widget",
+  ownerCode: string,
+): void {
+  if (kind === "menu" && !model.menuRegistry[ownerCode]) {
+    throw new Error(`Unknown menu "${ownerCode}"`);
+  }
+  const widgetOwners = new Set(
+    Object.values(model.permissionRegistry)
+      .map((permission) => permission.belongToMenuCode)
+      .filter((candidate) => !model.menuRegistry[candidate]),
+  );
+  if (kind === "widget" && !widgetOwners.has(ownerCode)) {
+    throw new Error(`Unknown widget "${ownerCode}"`);
+  }
+}
+
 function differences(
   current: readonly string[],
   baseline: readonly string[],
@@ -54,28 +92,105 @@ export function createEmptyDraft(): PermissionDraft {
   };
 }
 
+export function setRolePermissionMembership(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  roleCode: string,
+  permissionCodes: readonly string[],
+): PermissionDraft {
+  const role = editableRole(model, roleCode);
+  const next = sortedUnique(permissionCodes);
+  for (const code of next) {
+    if (!model.permissionRegistry[code]) throw new Error(`Unknown permission "${code}"`);
+  }
+  const rolePermissions = { ...draft.rolePermissions };
+  if (sameValues(next, role.permissionCodes)) delete rolePermissions[roleCode];
+  else rolePermissions[roleCode] = next;
+  return { ...draft, rolePermissions };
+}
+
+export function setContractOwnerMembership(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  contractType: string,
+  kind: "menu" | "widget",
+  ownerCodes: readonly string[],
+): PermissionDraft {
+  editableContract(model, contractType);
+  const next = sortedUnique(ownerCodes);
+  for (const ownerCode of next) validateContractOwner(model, kind, ownerCode);
+
+  const draftField = kind === "menu" ? "contractMenus" : "contractWidgets";
+  const modelField = kind === "menu" ? model.contractMenus : model.contractWidgets;
+  const overrides = { ...draft[draftField] };
+  if (sameValues(next, modelField[contractType] ?? [])) delete overrides[contractType];
+  else overrides[contractType] = next;
+  return { ...draft, [draftField]: overrides };
+}
+
+export function discardRoleDraft(draft: PermissionDraft, roleCode: string): PermissionDraft {
+  const rolePermissions = { ...draft.rolePermissions };
+  delete rolePermissions[roleCode];
+  return { ...draft, rolePermissions };
+}
+
+export function discardContractDraft(
+  draft: PermissionDraft,
+  contractType: string,
+): PermissionDraft {
+  const contractMenus = { ...draft.contractMenus };
+  const contractWidgets = { ...draft.contractWidgets };
+  delete contractMenus[contractType];
+  delete contractWidgets[contractType];
+  return { ...draft, contractMenus, contractWidgets };
+}
+
+export type DraftItemRef =
+  | { kind: "permission"; ownerCode: string; code: string }
+  | { kind: "menu" | "widget"; ownerCode: string; code: string };
+
+export function discardDraftItem(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  item: DraftItemRef,
+): PermissionDraft {
+  if (item.kind === "permission") {
+    const role = editableRole(model, item.ownerCode);
+    if (!model.permissionRegistry[item.code]) {
+      throw new Error(`Unknown permission "${item.code}"`);
+    }
+    const current = draft.rolePermissions[item.ownerCode] ?? role.permissionCodes;
+    const next = role.permissionCodes.includes(item.code)
+      ? [...current, item.code]
+      : current.filter((code) => code !== item.code);
+    return setRolePermissionMembership(draft, model, item.ownerCode, next);
+  }
+
+  editableContract(model, item.ownerCode);
+  validateContractOwner(model, item.kind, item.code);
+  const baseline =
+    item.kind === "menu"
+      ? (model.contractMenus[item.ownerCode] ?? [])
+      : (model.contractWidgets[item.ownerCode] ?? []);
+  const current =
+    item.kind === "menu"
+      ? (draft.contractMenus[item.ownerCode] ?? baseline)
+      : (draft.contractWidgets[item.ownerCode] ?? baseline);
+  const next = baseline.includes(item.code)
+    ? [...current, item.code]
+    : current.filter((code) => code !== item.code);
+  return setContractOwnerMembership(draft, model, item.ownerCode, item.kind, next);
+}
+
 export function toggleRolePermission(
   draft: PermissionDraft,
   model: PermissionStudioModel,
   roleCode: string,
   permissionCode: string,
 ): PermissionDraft {
-  const role = model.roles.find((candidate) => candidate.code === roleCode);
-  if (!role) throw new Error(`Unknown role "${roleCode}"`);
-  if (!role.code.startsWith("preset_")) {
-    throw new Error(`Role "${roleCode}" is not a preset role`);
-  }
-  if (!model.permissionRegistry[permissionCode]) {
-    throw new Error(`Unknown permission "${permissionCode}"`);
-  }
+  const role = editableRole(model, roleCode);
   const current = draft.rolePermissions[roleCode] ?? role.permissionCodes;
-  return {
-    ...draft,
-    rolePermissions: {
-      ...draft.rolePermissions,
-      [roleCode]: toggle(current, permissionCode),
-    },
-  };
+  return setRolePermissionMembership(draft, model, roleCode, toggle(current, permissionCode));
 }
 
 export function toggleContractOwner(
@@ -85,33 +200,10 @@ export function toggleContractOwner(
   owner: string,
   kind: "menu" | "widget",
 ): PermissionDraft {
-  if (!model.contractTypes.includes(contractType)) {
-    throw new Error(`Unknown contract "${contractType}"`);
-  }
-  if (contractType === "TEST") throw new Error("TEST is read-only");
-
-  if (kind === "menu" && !model.menuRegistry[owner]) {
-    throw new Error(`Unknown menu "${owner}"`);
-  }
-  const widgetOwners = new Set(
-    Object.values(model.permissionRegistry)
-      .map((permission) => permission.belongToMenuCode)
-      .filter((candidate) => !model.menuRegistry[candidate]),
-  );
-  if (kind === "widget" && !widgetOwners.has(owner)) {
-    throw new Error(`Unknown widget "${owner}"`);
-  }
-
   const draftField = kind === "menu" ? "contractMenus" : "contractWidgets";
   const modelField = kind === "menu" ? model.contractMenus : model.contractWidgets;
   const current = draft[draftField][contractType] ?? modelField[contractType] ?? [];
-  return {
-    ...draft,
-    [draftField]: {
-      ...draft[draftField],
-      [contractType]: toggle(current, owner),
-    },
-  };
+  return setContractOwnerMembership(draft, model, contractType, kind, toggle(current, owner));
 }
 
 export function applyDraftToModel(

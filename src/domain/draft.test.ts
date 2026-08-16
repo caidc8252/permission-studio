@@ -5,6 +5,11 @@ import {
   buildImpactDiff,
   buildPermissionChange,
   createEmptyDraft,
+  discardContractDraft,
+  discardDraftItem,
+  discardRoleDraft,
+  setContractOwnerMembership,
+  setRolePermissionMembership,
   toggleContractOwner,
   toggleRolePermission,
 } from "@/src/domain/draft";
@@ -57,6 +62,70 @@ describe("permission drafts", () => {
     });
   });
 
+  it("sets a role permission batch deterministically and removes empty overrides", () => {
+    const empty = createEmptyDraft();
+    const added = setRolePermissionMembership(empty, model, "preset_ops", [
+      "orders.view",
+      "orders.manage",
+      "orders.manage",
+    ]);
+    expect(added.rolePermissions.preset_ops).toEqual(["orders.manage", "orders.view"]);
+
+    const baseline = setRolePermissionMembership(
+      added,
+      model,
+      "preset_ops",
+      model.roles[0]!.permissionCodes,
+    );
+    expect(baseline.rolePermissions).toEqual({});
+  });
+
+  it("sets a contract owner batch deterministically and removes empty overrides", () => {
+    const added = setContractOwnerMembership(createEmptyDraft(), model, "ISO", "menu", []);
+    expect(added.contractMenus.ISO).toEqual([]);
+
+    const baseline = setContractOwnerMembership(
+      added,
+      model,
+      "ISO",
+      "menu",
+      model.contractMenus.ISO ?? [],
+    );
+    expect(baseline.contractMenus).toEqual({});
+  });
+
+  it("discards only one changed contract", () => {
+    const empty = createEmptyDraft();
+    const changed = setContractOwnerMembership(empty, model, "ISO", "menu", []);
+    expect(discardContractDraft(changed, "ISO")).toEqual(createEmptyDraft());
+  });
+
+  it("discards one item while preserving other changes for the same owner", () => {
+    const changedRole = setRolePermissionMembership(createEmptyDraft(), model, "preset_ops", [
+      "orders.manage",
+    ]);
+    const changedMenu = setContractOwnerMembership(changedRole, model, "ISO", "menu", []);
+
+    expect(discardRoleDraft(changedMenu, "preset_ops").rolePermissions).toEqual({});
+    expect(
+      discardDraftItem(changedMenu, model, {
+        kind: "menu",
+        ownerCode: "ISO",
+        code: "orders",
+      }),
+    ).toMatchObject({
+      contractMenus: {},
+      rolePermissions: { preset_ops: ["orders.manage"] },
+    });
+    expect(
+      discardDraftItem(changedMenu, model, {
+        kind: "permission",
+        ownerCode: "preset_ops",
+        code: "orders.manage",
+      }),
+    ).toMatchObject({ rolePermissions: { preset_ops: [] } });
+  });
+
   it("rejects unsupported role, contract, permission, owner, and TEST edits", () => {
     expect(() => toggleRolePermission(createEmptyDraft(), model, "missing", "orders.view")).toThrow(
       /unknown role/i,
@@ -73,6 +142,16 @@ describe("permission drafts", () => {
     expect(() => toggleContractOwner(createEmptyDraft(), model, "ISO", "missing", "menu")).toThrow(
       /unknown menu/i,
     );
+    expect(() =>
+      setRolePermissionMembership(createEmptyDraft(), model, "preset_ops", ["missing.permission"]),
+    ).toThrow(/unknown permission/i);
+    expect(() =>
+      discardDraftItem(createEmptyDraft(), model, {
+        kind: "permission",
+        ownerCode: "preset_ops",
+        code: "missing.permission",
+      }),
+    ).toThrow(/unknown permission/i);
   });
 
   it("builds a normalized versioned change from the draft", () => {
