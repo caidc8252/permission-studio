@@ -57,6 +57,7 @@ const model: PermissionStudioModel = {
     },
   },
   contractMenus: { ...baseModel.contractMenus, ISO: [] },
+  contractTypes: ["ISO", "PRO", "TEST"],
   translations: {
     ...baseModel.translations,
     "zh-CN": {
@@ -128,5 +129,36 @@ describe("ContractModuleEditor", () => {
     expect(onDraftChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ contractMenus: { ISO: ["orders", "orders.history"] } }),
     );
+  });
+
+  it("clears selected modules when switching contracts", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    render(
+      <ContractModuleEditor
+        model={model}
+        draft={createEmptyDraft()}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "快捷组件" }));
+    expect(screen.getByRole("button", { name: "启用已选模块" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "PRO" }));
+
+    expect(screen.getByRole("button", { name: "启用已选模块" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "启用已选模块" }));
+    expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
+  it("localizes menu and widget group headings and labels", () => {
+    render(
+      <ContractModuleEditor model={model} draft={createEmptyDraft()} onDraftChange={vi.fn()} />,
+    );
+
+    expect(screen.getByRole("heading", { level: 4, name: "菜单" })).toBeVisible();
+    expect(screen.getByRole("heading", { level: 4, name: "组件" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "菜单" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "组件" })).toBeVisible();
   });
 });

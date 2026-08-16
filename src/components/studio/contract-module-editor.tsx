@@ -36,6 +36,12 @@ const transferLabels: TransferLabels = {
   sameSideDrop: "该模块已在此列表中",
 };
 
+function localizedGroup(group: string): string {
+  if (group === "Menus") return "菜单";
+  if (group === "Widgets") return "组件";
+  return group;
+}
+
 function isVisibleMenu(
   model: PermissionStudioModel,
   item: TransferItem,
@@ -93,6 +99,8 @@ export function ContractModuleEditor({
     : null;
   const visibleItems = (items: TransferItem[]) =>
     items.filter((item) => isVisibleMenu(model, item, expandedMenus));
+  const localizeGroups = (items: TransferItem[]) =>
+    items.map((item) => ({ ...item, group: localizedGroup(item.group) }));
   const visibleMenuDescendants = (menuCode: string): string[] => {
     const descendants: string[] = [];
     const visited = new Set<string>([menuCode]);
@@ -216,9 +224,10 @@ export function ContractModuleEditor({
             </header>
             <div onChangeCapture={selectVisibleDescendants}>
               <DualListEditor
+                key={view.contractType}
                 ariaLabel={`${view.contractType}的模块`}
-                available={visibleItems(view.available)}
-                assigned={visibleItems(view.assigned)}
+                available={localizeGroups(visibleItems(view.available))}
+                assigned={localizeGroups(visibleItems(view.assigned))}
                 labels={transferLabels}
                 onTransfer={transfer}
                 renderItem={renderItem}
