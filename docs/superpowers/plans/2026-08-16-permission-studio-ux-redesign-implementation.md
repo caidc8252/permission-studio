@@ -253,7 +253,19 @@ export interface TransferRequest {
   direction: "assign" | "unassign";
   ids: string[];
 }
+
+export interface TransferLabels {
+  search: string;
+  available: string;
+  assigned: string;
+  assignSelected: string;
+  unassignSelected: string;
+}
 ```
+
+`DualListEditorProps` requires a `labels: TransferLabels` prop. The role editor
+uses permission wording; the contract editor supplies module wording without
+forking the component.
 
 - [ ] **Step 1: Install the exact drag core dependency**
 
@@ -317,7 +329,7 @@ export function DualListEditor({
     <section aria-label={ariaLabel} className={styles.transfer}>
       <TransferPanel
         side="available"
-        label="可添加"
+        label={labels.available}
         items={available}
         selection={availableSelection}
         onSelectionChange={setAvailableSelection}
@@ -331,19 +343,19 @@ export function DualListEditor({
           disabled={!availableSelection.size}
           onClick={() => transfer("assign", [...availableSelection])}
         >
-          添加已选权限
+          {labels.assignSelected}
         </button>
         <button
           type="button"
           disabled={!assignedSelection.size}
           onClick={() => transfer("unassign", [...assignedSelection])}
         >
-          移除已选权限
+          {labels.unassignSelected}
         </button>
       </div>
       <TransferPanel
         side="assigned"
-        label="已拥有"
+        label={labels.assigned}
         items={assigned}
         selection={assignedSelection}
         onSelectionChange={setAssignedSelection}
