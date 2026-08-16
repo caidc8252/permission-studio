@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createEmptyDraft, setRolePermissionMembership } from "@/src/domain/draft";
-import { buildRoleEditorView } from "@/src/domain/editor-view";
+import { buildContractEditorView, buildRoleEditorView } from "@/src/domain/editor-view";
 import type { PermissionStudioModel } from "@/src/domain/model";
 import { validModel } from "@/tests/fixtures/model";
 
@@ -88,5 +88,60 @@ describe("role editor view", () => {
     expect(() =>
       buildRoleEditorView(modelWithPrivateRole, createEmptyDraft(), "custom_ops"),
     ).toThrow("not editable");
+  });
+});
+
+describe("contract editor view", () => {
+  const modelWithNestedMenuAndWidget = {
+    ...model,
+    permissionCodes: [...model.permissionCodes, "widget.quick"],
+    menuRegistry: {
+      ...model.menuRegistry,
+      "orders.history": {
+        menuCode: "orders.history",
+        title: "menu.orders.history",
+        parentMenuCode: "orders",
+        path: "/orders/history",
+        icon: "history",
+        order: 1,
+      },
+    },
+    permissionRegistry: {
+      ...model.permissionRegistry,
+      "widget.quick": {
+        code: "widget.quick",
+        belongToMenuCode: "widget.quick",
+        label: "widget.quick",
+        desc: "widget.quickDesc",
+      },
+    },
+    contractMenus: { ...model.contractMenus, ISO: ["orders", "orders.history"] },
+    contractWidgets: { ...model.contractWidgets, ISO: ["widget.quick"] },
+    translations: {
+      ...model.translations,
+      "zh-CN": {
+        ...model.translations["zh-CN"],
+        "menu.orders.history": "订单历史",
+        "widget.quick": "快捷组件",
+        "widget.quickDesc": "快速访问组件",
+      },
+    },
+  } as unknown as PermissionStudioModel;
+
+  it("flattens the real menu tree and keeps widgets in a separate root group", () => {
+    const view = buildContractEditorView(modelWithNestedMenuAndWidget, createEmptyDraft(), "ISO");
+
+    expect(view.assigned).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "orders", kind: "menu", depth: 0 }),
+        expect.objectContaining({ id: "orders.history", kind: "menu", depth: 1 }),
+        expect.objectContaining({ id: "widget.quick", kind: "widget", group: "Widgets" }),
+      ]),
+    );
+    expect(view.assigned.find(({ id }) => id === "widget.quick")?.depth).toBe(0);
+  });
+
+  it("never exposes TEST as editable", () => {
+    expect(() => buildContractEditorView(model, createEmptyDraft(), "TEST")).toThrow("read-only");
   });
 });

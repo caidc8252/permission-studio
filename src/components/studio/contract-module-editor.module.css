@@ -1,0 +1,102 @@
+.editor {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.3fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.sidebar,
+.content {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--surface-border, #254239);
+  border-radius: 12px;
+  background: rgb(0 0 0 / 13%);
+}
+
+.sidebar {
+  align-self: start;
+}
+
+.sidebar h2,
+.heading h2,
+.heading p {
+  margin: 0;
+}
+
+.contractList {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 14px 0 0;
+  list-style: none;
+}
+
+.contractList button {
+  width: 100%;
+  text-align: left;
+}
+
+.contractList button[aria-pressed="true"] {
+  border-color: var(--accent, #70e0b1);
+}
+
+.content {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.heading p,
+.empty {
+  margin-top: 5px;
+  color: var(--muted, #9db7ae);
+}
+
+.item {
+  display: flex;
+  min-width: 0;
+  align-items: start;
+  gap: 5px;
+}
+
+.branchToggle,
+.branchPlaceholder {
+  display: grid;
+  width: 1.25rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.branchToggle {
+  color: var(--muted, #9db7ae);
+  cursor: pointer;
+}
+
+.branchToggle:hover,
+.branchToggle:focus-visible {
+  color: var(--accent, #70e0b1);
+  outline: 1px solid currentcolor;
+}
+
+.itemCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.itemCopy code,
+.itemCopy span {
+  color: var(--muted, #9db7ae);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .editor {
+    grid-template-columns: 1fr;
+  }
+}
