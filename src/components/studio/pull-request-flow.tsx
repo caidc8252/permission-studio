@@ -84,6 +84,12 @@ function safePrUrl(value?: string): string | null {
   }
 }
 
+function failedAfterConfirmation(job: ClientChangeJob | null): boolean {
+  if (job?.state !== "failed") return false;
+  if (typeof job.confirmationNonce === "string") return job.confirmationNonce.trim() === "";
+  return Boolean(job.recoveryCommand || job.prUrl);
+}
+
 function toIntent(
   model: PermissionStudioModel,
   draft: PermissionDraft,
@@ -143,9 +149,7 @@ export function PullRequestFlow({
   const failureSummary = job?.failureSummary ? sanitizeRecoveryText(job.failureSummary) : null;
   const prUrl = safePrUrl(job?.prUrl);
   const hasVisibleDiff = Boolean(job?.diff?.trim());
-  const isFinalizationFailure =
-    job?.state === "failed" &&
-    (job.errorCode === "FINALIZE_FAILED" || job.errorCode === "PR_CREATE_FAILED");
+  const isFinalizationFailure = failedAfterConfirmation(job);
   const isValidationFailure = job?.state === "failed" && !isFinalizationFailure;
   const currentStage = !job
     ? 1
@@ -194,7 +198,9 @@ export function PullRequestFlow({
           ? "变更校验失败，未进入最终确认"
           : job?.errorCode === "PR_CREATE_FAILED"
             ? "远端分支已保留，请手动创建 Draft PR"
-            : "推送失败，未创建 Draft PR"}
+            : job?.errorCode === "FINALIZE_FAILED"
+              ? "推送失败，未创建 Draft PR"
+              : "最终处理失败，未创建 Draft PR"}
       </p>
       {recoveryCommand ? (
         <code>{recoveryCommand}</code>

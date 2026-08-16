@@ -211,6 +211,9 @@ describe("useChangeJob", () => {
       "github_pat_supersecret123",
       "Authorization: Bearer bearer-secret-456",
       "token=token-secret-789",
+      "Authorization: token authorization-secret-123",
+      "token bare-secret-456",
+      "--token flag-secret-789",
     ];
     vi.stubGlobal(
       "fetch",

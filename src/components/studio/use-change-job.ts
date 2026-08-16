@@ -67,7 +67,7 @@ export function redactClientSecrets(value: string): string {
     .replace(/(https?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, "$1[REDACTED]@")
     .replace(/\b(?:Authorization\s*:\s*)?Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "[REDACTED]")
     .replace(
-      /\b(?:token|password|passwd|secret|api[_-]?key)\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi,
+      /\b(?:token|password|passwd|secret|api[_-]?key)(?:\s*[:=]\s*|\s+)[A-Za-z0-9._~+/=-]+/gi,
       "[REDACTED]",
     );
 }

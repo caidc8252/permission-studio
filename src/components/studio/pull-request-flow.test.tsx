@@ -146,7 +146,6 @@ describe("PullRequestFlow", () => {
     const failedJob = {
       ...awaitingJob,
       state: "failed" as const,
-      confirmationNonce: "",
       errorCode: "PREPARE_FAILED",
       validationSteps: [],
       diff: "",
@@ -187,6 +186,7 @@ describe("PullRequestFlow", () => {
   it.each([
     ["FINALIZE_FAILED", "推送失败，未创建 Draft PR"],
     ["PR_CREATE_FAILED", "远端分支已保留，请手动创建 Draft PR"],
+    ["FINALIZE_DIFF_MISMATCH", "最终处理失败，未创建 Draft PR"],
   ])("renders sanitized %s recovery without leaking credentials", async (errorCode, copy) => {
     const user = userEvent.setup();
     const failedJob = {
@@ -198,7 +198,7 @@ describe("PullRequestFlow", () => {
         errorCode === "PR_CREATE_FAILED"
           ? "gh pr create --repo org/repo --base develop --head permission-studio/id --draft"
           : "powershell -Command Get-Content C:\\private\\credential.txt",
-      failureSummary: `[REDACTED]\n${"x".repeat(3_900)} github_pat_supersecret123 Authorization: Bearer bearer-secret-456 token=token-secret-789 ghp_supersecrettoken123 at C:\\private\\credential.txt`,
+      failureSummary: `[REDACTED]\n${"x".repeat(3_750)} github_pat_supersecret123 Authorization: Bearer bearer-secret-456 token=token-secret-789 Authorization: token authorization-secret-123 token bare-secret-456 --token flag-secret-789 ghp_supersecrettoken123 at C:\\private\\credential.txt`,
     };
     const fetchMock = vi
       .fn()
@@ -221,6 +221,9 @@ describe("PullRequestFlow", () => {
     expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("github_pat_");
     expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("bearer-secret-456");
     expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("token-secret-789");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("authorization-secret-123");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("bare-secret-456");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("flag-secret-789");
     expect(screen.queryByText(/ghp_supersecrettoken123/)).not.toBeInTheDocument();
     expect(screen.queryByText(/private\\credential/)).not.toBeInTheDocument();
     if (errorCode === "PR_CREATE_FAILED") {
@@ -235,15 +238,15 @@ describe("PullRequestFlow", () => {
 
   it("hides a credential-bearing recovery command", async () => {
     const user = userEvent.setup();
-    const credentialCommand =
-      "gh pr create --repo org/repo --title github_pat_supersecret123 --draft";
+    const credentialCommand = "gh pr create --repo org/repo --token flag-secret-789 --draft";
     const failedJob = {
       ...awaitingJob,
       state: "failed" as const,
       confirmationNonce: "",
       errorCode: "PR_CREATE_FAILED",
       recoveryCommand: credentialCommand,
-      failureSummary: "Authorization: Bearer bearer-secret-456 token=token-secret-789",
+      failureSummary:
+        "Authorization: token authorization-secret-123 token bare-secret-456 --token flag-secret-789",
     };
     const fetchMock = vi
       .fn()
@@ -262,8 +265,9 @@ describe("PullRequestFlow", () => {
 
     expect(await screen.findByText("恢复命令未通过安全检查，已隐藏。")).toBeVisible();
     expect(screen.queryByText(credentialCommand)).not.toBeInTheDocument();
-    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("bearer-secret-456");
-    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("token-secret-789");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("authorization-secret-123");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("bare-secret-456");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("flag-secret-789");
   });
 
   it("starts a new change after success and clears completed state and draft", async () => {
