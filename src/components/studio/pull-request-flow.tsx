@@ -1,0 +1,360 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+import { ChangeReview } from "@/src/components/studio/change-review";
+import styles from "@/src/components/studio/pull-request-flow.module.css";
+import {
+  useChangeJob,
+  type ClientChangeJob,
+  type PrepareIntent,
+} from "@/src/components/studio/use-change-job";
+import {
+  buildImpactDiff,
+  buildPermissionChange,
+  createEmptyDraft,
+  type ImpactDiff,
+  type PermissionDraft,
+} from "@/src/domain/draft";
+import type { PermissionStudioModel } from "@/src/domain/model";
+
+export interface PullRequestFlowProps {
+  model: PermissionStudioModel;
+  draft: PermissionDraft;
+  onDraftChange: (draft: PermissionDraft) => void;
+  impact?: ImpactDiff;
+  title?: string;
+  reason?: string;
+  onTitleChange?: (title: string) => void;
+  onReasonChange?: (reason: string) => void;
+  stale?: boolean;
+  pending?: boolean;
+  onJobChange?: (job: ClientChangeJob | null) => void;
+}
+
+const INTENT_REQUEST_ID = "00000000000000000000000000";
+
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f);
+  });
+}
+
+function isMetadataValueValid(value: string, maximum: number): boolean {
+  const trimmed = value.trim();
+  return trimmed.length >= 8 && trimmed.length <= maximum && !hasControlCharacter(trimmed);
+}
+
+function sanitizeRecoveryText(value: string): string {
+  const redacted = value
+    .replace(/\bgh[pousr]_[A-Za-z0-9_]{8,}\b/gi, "[REDACTED]")
+    .replace(/\b(?:Bearer|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi, "[REDACTED]")
+    .replace(/[A-Za-z]:\\+(?:[^\\\s"'{}]+\\+)*[^\\\s"'{}]*/g, "[REDACTED]");
+  return [...redacted]
+    .filter((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return (
+        codePoint === 0x09 ||
+        codePoint === 0x0a ||
+        codePoint === 0x0d ||
+        (codePoint >= 0x20 && codePoint <= 0x7e) ||
+        codePoint >= 0xa0
+      );
+    })
+    .join("")
+    .slice(0, 4_000);
+}
+
+function safeRecoveryCommand(command?: string): string | null {
+  if (!command) return null;
+  const sanitized = sanitizeRecoveryText(command).trim();
+  return /^gh pr create(?: [A-Za-z0-9_./:-]+)+$/.test(sanitized) ? sanitized : null;
+}
+
+function safePrUrl(value?: string): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function toIntent(
+  model: PermissionStudioModel,
+  draft: PermissionDraft,
+  title: string,
+  reason: string,
+): PrepareIntent {
+  const change = buildPermissionChange(model, draft, {
+    requestId: INTENT_REQUEST_ID,
+    title: title.trim(),
+    reason: reason.trim(),
+  });
+  return {
+    baseSha: change.baseSha,
+    title: change.title,
+    reason: change.reason,
+    roleChanges: change.roleChanges,
+    contractChanges: change.contractChanges,
+  };
+}
+
+export function PullRequestFlow({
+  model,
+  draft,
+  onDraftChange,
+  impact: suppliedImpact,
+  title: suppliedTitle,
+  reason: suppliedReason,
+  onTitleChange,
+  onReasonChange,
+  stale = false,
+  pending: externalPending = false,
+  onJobChange,
+}: PullRequestFlowProps) {
+  const [localTitle, setLocalTitle] = useState("");
+  const [localReason, setLocalReason] = useState("");
+  const [diffInspected, setDiffInspected] = useState(false);
+  const controller = useChangeJob(model.sourceSha);
+  const { job } = controller;
+  const impact = useMemo(
+    () => suppliedImpact ?? buildImpactDiff(model, draft),
+    [draft, model, suppliedImpact],
+  );
+  const title = suppliedTitle ?? localTitle;
+  const reason = suppliedReason ?? localReason;
+  const titleValid = isMetadataValueValid(title, 120);
+  const reasonValid = isMetadataValueValid(reason, 500);
+  const hasChanges =
+    impact.addedRolePermissions.length +
+      impact.removedRolePermissions.length +
+      impact.addedContractOwners.length +
+      impact.removedContractOwners.length >
+    0;
+  const busy = externalPending || controller.pending;
+  const locked = busy || job !== null;
+  const canPrepare = hasChanges && titleValid && reasonValid && !stale && !locked;
+  const recoveryCommand = safeRecoveryCommand(job?.recoveryCommand);
+  const failureSummary = job?.failureSummary ? sanitizeRecoveryText(job.failureSummary) : null;
+  const prUrl = safePrUrl(job?.prUrl);
+  const currentStage = !job
+    ? 1
+    : job.state === "validating" || (job.state === "awaiting-confirmation" && !diffInspected)
+      ? 2
+      : 3;
+
+  useEffect(() => {
+    setDiffInspected(false);
+  }, [job?.requestId]);
+
+  useEffect(() => {
+    onJobChange?.(job);
+  }, [job, onJobChange]);
+
+  const changeTitle = (value: string) => {
+    if (suppliedTitle === undefined) setLocalTitle(value);
+    onTitleChange?.(value);
+  };
+  const changeReason = (value: string) => {
+    if (suppliedReason === undefined) setLocalReason(value);
+    onReasonChange?.(value);
+  };
+  const prepare = async () => {
+    if (!canPrepare) return;
+    setDiffInspected(false);
+    await controller.prepare(toIntent(model, draft, title, reason));
+  };
+  const discard = async () => {
+    await controller.discard();
+    setDiffInspected(false);
+  };
+  const startNewChange = () => {
+    controller.clearCompleted();
+    onDraftChange(createEmptyDraft());
+    changeTitle("");
+    changeReason("");
+    setDiffInspected(false);
+  };
+
+  return (
+    <section className={styles.flow} aria-label="Draft PR 创建流程">
+      <ol className={styles.steps} aria-label="Draft PR 三步流程">
+        <li aria-current={currentStage === 1 ? "step" : undefined}>1. 业务检查</li>
+        <li aria-current={currentStage === 2 ? "step" : undefined}>2. 校验与 diff</li>
+        <li aria-current={currentStage === 3 ? "step" : undefined}>3. 最终确认</li>
+      </ol>
+
+      <section className={styles.stage} aria-labelledby="pr-stage-one">
+        <h2 id="pr-stage-one">第 1 步：检查业务变更</h2>
+        <div className={styles.review}>
+          <ChangeReview
+            model={model}
+            draft={draft}
+            onDraftChange={onDraftChange}
+            disabled={locked}
+          />
+        </div>
+        <div className={styles.metadata}>
+          <label>
+            <span>PR 标题</span>
+            <input
+              type="text"
+              aria-label="PR 标题"
+              aria-invalid={title.length > 0 && !titleValid}
+              aria-describedby="pr-title-help"
+              value={title}
+              maxLength={120}
+              disabled={locked}
+              onChange={(event) => changeTitle(event.target.value)}
+            />
+          </label>
+          <p id="pr-title-help">
+            {title.length > 0 && !titleValid
+              ? "PR 标题必须为 8–120 个字符，且不能包含控制字符"
+              : "使用 8–120 个字符概括权限变更"}
+          </p>
+          <label>
+            <span>变更原因</span>
+            <textarea
+              aria-label="变更原因"
+              aria-invalid={reason.length > 0 && !reasonValid}
+              aria-describedby="pr-reason-help"
+              value={reason}
+              maxLength={500}
+              rows={4}
+              disabled={locked}
+              onChange={(event) => changeReason(event.target.value)}
+            />
+          </label>
+          <p id="pr-reason-help">
+            {reason.length > 0 && !reasonValid
+              ? "变更原因必须为 8–500 个字符，且不能包含控制字符"
+              : "说明业务目的和受影响的使用场景"}
+          </p>
+        </div>
+        {stale ? <p className={styles.warning}>模型已过期，请先刷新 develop</p> : null}
+        <button type="button" disabled={!canPrepare} onClick={() => void prepare()}>
+          {busy && !job ? "校验中…" : "校验变更"}
+        </button>
+      </section>
+
+      {controller.error ? (
+        <p className={styles.warning} role="alert">
+          {controller.error}
+        </p>
+      ) : null}
+      {controller.message ? (
+        <p className={styles.message} role="status">
+          {controller.message}
+        </p>
+      ) : null}
+
+      {job ? (
+        <section className={styles.stage} aria-labelledby="pr-stage-two">
+          <h2 id="pr-stage-two">第 2 步：校验与完整 diff</h2>
+          <p>
+            请求 ID：<code>{job.requestId}</code>
+          </p>
+          {job.validationSteps?.length ? (
+            <ul className={styles.validation} aria-label="校验结果">
+              {job.validationSteps.map((step) => (
+                <li key={step.name}>
+                  <strong>{step.name}</strong>
+                  <span>
+                    <span aria-hidden="true">✓ </span>通过 · {step.durationMs} ms
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p role="status">正在等待校验结果…</p>
+          )}
+          {job.diff ? (
+            <pre className={styles.diff} aria-label="服务器生成的完整 Git diff">
+              {job.diff}
+            </pre>
+          ) : null}
+          {job.state === "awaiting-confirmation" ? (
+            <label className={styles.inspection}>
+              <input
+                type="checkbox"
+                aria-label="已检查完整 diff"
+                checked={diffInspected}
+                onChange={(event) => setDiffInspected(event.target.checked)}
+              />
+              已检查完整 diff
+            </label>
+          ) : null}
+        </section>
+      ) : null}
+
+      {job ? (
+        <section className={styles.stage} aria-labelledby="pr-stage-three">
+          <h2 id="pr-stage-three">第 3 步：最终确认</h2>
+          {job.state === "validating" ? <p role="status">正在校验变更，请稍候。</p> : null}
+          {job.state === "awaiting-confirmation" ? (
+            <div className={styles.actions}>
+              <p>最终确认后将推送远端分支并创建 Draft PR。</p>
+              <button
+                type="button"
+                disabled={!diffInspected || busy}
+                onClick={() => void controller.confirm()}
+              >
+                确认推送并创建 Draft PR
+              </button>
+              <button type="button" disabled={busy} onClick={() => void discard()}>
+                丢弃准备结果
+              </button>
+            </div>
+          ) : null}
+          {job.state === "finalizing" ? (
+            <p className={styles.message} role="status">
+              正在推送并创建 Draft PR…
+            </p>
+          ) : null}
+          {job.state === "completed" ? (
+            <div className={styles.actions}>
+              <p className={styles.success} role="status">
+                Draft PR 已创建
+              </p>
+              {prUrl ? (
+                <a className={styles.prLink} href={prUrl} target="_blank" rel="noreferrer">
+                  打开 Draft PR
+                </a>
+              ) : (
+                <p className={styles.warning}>服务器未返回可安全打开的 PR 地址</p>
+              )}
+              <button type="button" onClick={startNewChange}>
+                开始新变更
+              </button>
+            </div>
+          ) : null}
+          {job.state === "failed" ? (
+            <div className={styles.recovery} role="alert">
+              <p>
+                {job.errorCode === "PR_CREATE_FAILED"
+                  ? "远端分支已保留，请手动创建 Draft PR"
+                  : job.errorCode === "FINALIZE_FAILED"
+                    ? "推送失败，未创建 Draft PR"
+                    : "变更校验或远端写入失败"}
+              </p>
+              {recoveryCommand ? (
+                <code>{recoveryCommand}</code>
+              ) : job.recoveryCommand ? (
+                <p>恢复命令未通过安全检查，已隐藏。</p>
+              ) : null}
+              {failureSummary ? <pre aria-label="脱敏失败日志">{failureSummary}</pre> : null}
+              <button type="button" disabled={busy} onClick={() => void discard()}>
+                丢弃并清理失败现场
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+    </section>
+  );
+}
