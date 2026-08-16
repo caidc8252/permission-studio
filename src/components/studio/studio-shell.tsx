@@ -318,15 +318,16 @@ export function StudioShell({
             </fieldset>
           ) : null}
           {item.id === "contracts" ? (
-            <fieldset className={styles.editorLock} disabled={draftLocked}>
+            <div className={styles.editorLock} aria-disabled={draftLocked || undefined}>
               <ContractModuleEditor
                 model={model}
                 draft={draft}
                 selectedContractType={selectedContractType}
                 onSelectedContractTypeChange={setSelectedContractType}
+                disabled={draftLocked}
                 onDraftChange={setDraft}
               />
-            </fieldset>
+            </div>
           ) : null}
           {item.id === "simulation" ? <PermissionSimulator model={model} draft={draft} /> : null}
         </section>

@@ -58,7 +58,8 @@
   border: 0;
 }
 
-.editorLock:disabled {
+.editorLock:disabled,
+.editorLock[aria-disabled="true"] {
   opacity: 0.72;
 }
 

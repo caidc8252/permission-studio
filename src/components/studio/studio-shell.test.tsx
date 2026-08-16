@@ -27,6 +27,54 @@ vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => ({
   monitorForElements: dragAndDrop.monitorForElements,
 }));
 
+vi.mock("@/src/components/studio/contract-module-graph", () => ({
+  ContractModuleGraph: ({
+    contractType,
+    model,
+    draft,
+    disabled,
+    onDraftChange,
+  }: {
+    contractType: string;
+    model: PermissionStudioModel;
+    draft: { contractMenus: Record<string, string[]> };
+    disabled: boolean;
+    onDraftChange: (draft: unknown) => void;
+  }) => {
+    const current = draft.contractMenus[contractType] ?? model.contractMenus[contractType] ?? [];
+    const checked = current.includes("orders");
+    return (
+      <section aria-label={`${contractType} 合同模块关系图`}>
+        <label>
+          启用订单
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={disabled}
+            onChange={() =>
+              onDraftChange({
+                ...draft,
+                contractMenus: {
+                  ...draft.contractMenus,
+                  [contractType]: checked ? [] : ["orders"],
+                },
+              })
+            }
+          />
+        </label>
+        <label>
+          搜索模块
+          <input type="search" />
+        </label>
+        <button type="button">适应画布</button>
+        <button type="button" disabled={disabled}>
+          自动整理
+        </button>
+      </section>
+    );
+  },
+}));
+
 import { StudioShell } from "@/src/components/studio/studio-shell";
 import { ACTIVE_CHANGE_JOB_KEY } from "@/src/components/studio/use-change-job";
 import { createEmptyDraft, setRolePermissionMembership } from "@/src/domain/draft";
@@ -73,8 +121,7 @@ describe("StudioShell", () => {
     await user.click(screen.getByRole("checkbox", { name: "管理订单" }));
     await user.click(screen.getByRole("button", { name: "添加已选权限" }));
     await user.click(screen.getByRole("tab", { name: "合同模块" }));
-    await user.click(screen.getByRole("checkbox", { name: "订单" }));
-    await user.click(screen.getByRole("button", { name: "移除已选模块" }));
+    await user.click(screen.getByRole("checkbox", { name: "启用订单" }));
     await user.click(screen.getByRole("tab", { name: "角色权限" }));
 
     expect(screen.getByText("草稿中有 2 项变更")).toBeVisible();
@@ -118,8 +165,7 @@ describe("StudioShell", () => {
     await user.click(screen.getByRole("checkbox", { name: "管理订单" }));
     await user.click(screen.getByRole("button", { name: "添加已选权限" }));
     await user.click(screen.getByRole("tab", { name: "合同模块" }));
-    await user.click(screen.getByRole("checkbox", { name: "订单" }));
-    await user.click(screen.getByRole("button", { name: "移除已选模块" }));
+    await user.click(screen.getByRole("checkbox", { name: "启用订单" }));
     await user.click(screen.getByRole("button", { name: "刷新 develop" }));
 
     expect(await screen.findByText("1 项草稿冲突需要处理")).toBeVisible();
@@ -195,7 +241,8 @@ describe("StudioShell", () => {
     await user.click(screen.getByRole("tab", { name: "角色权限" }));
     expect(screen.getByRole("searchbox", { name: "搜索角色" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "合同模块" }));
-    expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeDisabled();
+    expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "权限模拟" }));
     expect(screen.getByRole("radio", { name: "普通成员" })).toBeEnabled();
 
@@ -261,7 +308,8 @@ describe("StudioShell", () => {
     expect(await screen.findByText(requestId)).toBeVisible();
     expect(screen.getByRole("button", { name: "添加已选权限" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "合同模块" }));
-    expect(screen.getByRole("button", { name: "移除已选模块" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "适应画布" })).toBeEnabled();
     await user.click(screen.getByRole("tab", { name: "权限模拟" }));
     expect(screen.getByRole("radio", { name: "普通成员" })).toBeEnabled();
     expect(screen.getByText(requestId)).toBeVisible();

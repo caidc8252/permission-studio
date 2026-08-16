@@ -6,25 +6,42 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const dragAndDrop = vi.hoisted(() => ({
-  combine: vi.fn(
-    (...cleanups: Array<() => void>) =>
-      () =>
-        cleanups.forEach((cleanup) => cleanup()),
+vi.mock("@/src/components/studio/contract-module-graph", () => ({
+  ContractModuleGraph: ({
+    contractType,
+    draft,
+    disabled,
+    onDraftChange,
+  }: {
+    contractType: string;
+    draft: { contractMenus: Record<string, string[]> };
+    disabled: boolean;
+    onDraftChange: (draft: unknown) => void;
+  }) => (
+    <section aria-label={`${contractType} 合同模块关系图`}>
+      <label>
+        图中订单
+        <input
+          type="checkbox"
+          disabled={disabled}
+          onChange={() =>
+            onDraftChange({
+              ...draft,
+              contractMenus: { ...draft.contractMenus, [contractType]: ["orders"] },
+            })
+          }
+        />
+      </label>
+      <label>
+        搜索模块
+        <input type="search" />
+      </label>
+      <button type="button">适应画布</button>
+      <button type="button" disabled={disabled}>
+        自动整理
+      </button>
+    </section>
   ),
-  draggable: vi.fn(() => () => undefined),
-  dropTargetForElements: vi.fn(() => () => undefined),
-  monitorForElements: vi.fn(() => () => undefined),
-}));
-
-vi.mock("@atlaskit/pragmatic-drag-and-drop/combine", () => ({
-  combine: dragAndDrop.combine,
-}));
-
-vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => ({
-  draggable: dragAndDrop.draggable,
-  dropTargetForElements: dragAndDrop.dropTargetForElements,
-  monitorForElements: dragAndDrop.monitorForElements,
 }));
 
 import { ContractModuleEditor } from "@/src/components/studio/contract-module-editor";
@@ -35,53 +52,24 @@ import { validModel } from "@/tests/fixtures/model";
 const baseModel = validModel as unknown as PermissionStudioModel;
 const model: PermissionStudioModel = {
   ...baseModel,
-  permissionCodes: [...baseModel.permissionCodes, "widget.quick"],
-  menuRegistry: {
-    ...baseModel.menuRegistry,
-    "orders.history": {
-      menuCode: "orders.history",
-      title: "menu.orders.history",
-      parentMenuCode: "orders",
-      path: "/orders/history",
-      icon: "history",
-      order: 1,
-    },
-    "orders.pending": {
-      menuCode: "orders.pending",
-      title: "menu.orders.pending",
-      parentMenuCode: "orders",
-      path: "/orders/pending",
-      icon: "clock",
-      order: 2,
-    },
-  },
-  permissionRegistry: {
-    ...baseModel.permissionRegistry,
-    "widget.quick": {
-      code: "widget.quick",
-      belongToMenuCode: "widget.quick",
-      label: "widget.quick",
-      desc: "widget.quickDesc",
-    },
-  },
-  contractMenus: { ...baseModel.contractMenus, ISO: [] },
   contractTypes: ["ISO", "PRO", "TEST"],
-  translations: {
-    ...baseModel.translations,
-    "zh-CN": {
-      ...baseModel.translations["zh-CN"],
-      "menu.orders.history": "订单历史",
-      "menu.orders.pending": "待处理订单",
-      "widget.quick": "快捷组件",
-      "widget.quickDesc": "快速访问组件",
-    },
-  },
 };
 
 afterEach(cleanup);
 
 describe("ContractModuleEditor", () => {
-  it("moves selected menus and widgets without fabricating related codes", async () => {
+  it("renders the relationship graph instead of a transfer list", () => {
+    render(
+      <ContractModuleEditor model={model} draft={createEmptyDraft()} onDraftChange={vi.fn()} />,
+    );
+
+    expect(screen.getByLabelText("ISO 合同模块关系图")).toBeVisible();
+    expect(screen.queryByText("可启用模块")).not.toBeInTheDocument();
+    expect(screen.queryByText("已启用模块")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "启用已选模块" })).not.toBeInTheDocument();
+  });
+
+  it("passes graph changes through the existing draft boundary", async () => {
     const user = userEvent.setup();
     const onDraftChange = vi.fn();
     render(
@@ -92,104 +80,43 @@ describe("ContractModuleEditor", () => {
       />,
     );
 
-    await user.click(screen.getByRole("checkbox", { name: "快捷组件" }));
-    await user.click(screen.getByRole("button", { name: "启用已选模块" }));
-
+    await user.click(screen.getByRole("checkbox", { name: "图中订单" }));
     expect(onDraftChange).toHaveBeenCalledWith(
-      expect.objectContaining({ contractWidgets: { ISO: ["widget.quick"] } }),
+      expect.objectContaining({ contractMenus: { ISO: ["orders"] } }),
     );
-    expect(onDraftChange.mock.lastCall?.[0].contractMenus).toEqual({});
   });
 
-  it("expands and collapses a menu branch without changing the draft", async () => {
+  it("switches graph roots and reports the selected contract", async () => {
     const user = userEvent.setup();
-    const onDraftChange = vi.fn();
+    const onSelectedContractTypeChange = vi.fn();
     render(
       <ContractModuleEditor
         model={model}
         draft={createEmptyDraft()}
-        onDraftChange={onDraftChange}
+        onSelectedContractTypeChange={onSelectedContractTypeChange}
+        onDraftChange={vi.fn()}
       />,
     );
 
-    expect(screen.getByRole("checkbox", { name: "订单历史" })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "收起订单" }));
-    expect(screen.queryByRole("checkbox", { name: "订单历史" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "展开订单" }));
-    expect(screen.getByRole("checkbox", { name: "订单历史" })).toBeVisible();
-    expect(onDraftChange).not.toHaveBeenCalled();
-  });
-
-  it("selects all menu descendants even when the branch is collapsed", async () => {
-    const user = userEvent.setup();
-    const onDraftChange = vi.fn();
-    render(
-      <ContractModuleEditor
-        model={model}
-        draft={createEmptyDraft()}
-        onDraftChange={onDraftChange}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "收起订单" }));
-    expect(screen.queryByRole("checkbox", { name: "订单历史" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("checkbox", { name: "订单" }));
-    await user.click(screen.getByRole("button", { name: "展开订单" }));
-    expect(screen.getByRole("checkbox", { name: "订单历史" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "待处理订单" })).toBeChecked();
-    await user.click(screen.getByRole("button", { name: "启用已选模块" }));
-
-    expect(onDraftChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        contractMenus: { ISO: ["orders", "orders.history", "orders.pending"] },
-      }),
-    );
-  });
-
-  it("marks a parent partial and then selected as all children are selected", async () => {
-    const user = userEvent.setup();
-    render(
-      <ContractModuleEditor model={model} draft={createEmptyDraft()} onDraftChange={vi.fn()} />,
-    );
-
-    const parent = screen.getByRole("checkbox", { name: "订单" });
-    await user.click(screen.getByRole("checkbox", { name: "订单历史" }));
-    expect(parent).toBePartiallyChecked();
-    await user.click(screen.getByRole("checkbox", { name: "待处理订单" }));
-    expect(parent).toBeChecked();
-
-    await user.click(screen.getByRole("checkbox", { name: "订单历史" }));
-    expect(parent).toBePartiallyChecked();
-  });
-
-  it("clears selected modules when switching contracts", async () => {
-    const user = userEvent.setup();
-    const onDraftChange = vi.fn();
-    render(
-      <ContractModuleEditor
-        model={model}
-        draft={createEmptyDraft()}
-        onDraftChange={onDraftChange}
-      />,
-    );
-
-    await user.click(screen.getByRole("checkbox", { name: "快捷组件" }));
-    expect(screen.getByRole("button", { name: "启用已选模块" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "PRO" }));
-
-    expect(screen.getByRole("button", { name: "启用已选模块" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "启用已选模块" }));
-    expect(onDraftChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("PRO 合同模块关系图")).toBeVisible();
+    expect(onSelectedContractTypeChange).toHaveBeenCalledWith("PRO");
+    expect(screen.queryByRole("button", { name: "TEST" })).not.toBeInTheDocument();
   });
 
-  it("localizes menu and widget group headings and labels", () => {
+  it("locks graph mutations while leaving its view controls available", () => {
     render(
-      <ContractModuleEditor model={model} draft={createEmptyDraft()} onDraftChange={vi.fn()} />,
+      <ContractModuleEditor
+        model={model}
+        draft={createEmptyDraft()}
+        disabled
+        onDraftChange={vi.fn()}
+      />,
     );
 
-    expect(screen.getByRole("heading", { level: 4, name: "菜单" })).toBeVisible();
-    expect(screen.getByRole("heading", { level: 4, name: "组件" })).toBeVisible();
-    expect(screen.getByRole("region", { name: "菜单" })).toBeVisible();
-    expect(screen.getByRole("region", { name: "组件" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "图中订单" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "自动整理" })).toBeDisabled();
+    expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "适应画布" })).toBeEnabled();
   });
 });
