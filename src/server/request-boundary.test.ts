@@ -16,6 +16,14 @@ describe("localhost request boundary", () => {
     ).toBe(false);
   });
 
+  it("trusts the actual Host header when Next.js normalizes the request URL host", () => {
+    const request = new Request("http://localhost:3100/api/health", {
+      headers: { host: "127.0.0.1:3100" },
+    });
+
+    expect(isExpectedHost(request, origin)).toBe(true);
+  });
+
   it("also requires exact Origin on mutations", () => {
     expect(
       isExpectedMutation(new Request(`${origin}/api/change`, { headers: { origin } }), origin),
