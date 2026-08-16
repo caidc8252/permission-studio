@@ -8,9 +8,9 @@
 .content {
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 12px;
-  background: rgb(0 0 0 / 13%);
+  background: var(--surface-subtle, #f7f9fc);
 }
 
 .sidebar {
@@ -22,7 +22,7 @@
 .search {
   display: grid;
   gap: 6px;
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.85rem;
 }
 
@@ -31,16 +31,16 @@
   width: 100%;
   padding: 9px 10px;
   color: inherit;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 8px;
-  background: #091612;
+  background: var(--surface, #ffffff);
 }
 
 .changesOnly {
   display: flex;
   gap: 7px;
   align-items: center;
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.85rem;
 }
 
@@ -66,15 +66,15 @@
 }
 
 .roleList button[aria-pressed="true"] {
-  border-color: var(--accent, #70e0b1);
+  border-color: var(--accent, #2563eb);
 }
 
 .roleList small {
   min-width: 1.4rem;
   padding: 1px 5px;
-  color: #052116;
+  color: var(--accent-contrast, #ffffff);
   border-radius: 999px;
-  background: var(--accent, #70e0b1);
+  background: var(--accent, #2563eb);
   text-align: center;
 }
 
@@ -98,7 +98,7 @@
 
 .heading p,
 .heading label {
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
 }
 
 .heading label {
@@ -109,7 +109,7 @@
 }
 
 .empty {
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
 }
 
 @media (max-width: 760px) {

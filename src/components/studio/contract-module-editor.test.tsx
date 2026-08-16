@@ -46,6 +46,14 @@ const model: PermissionStudioModel = {
       icon: "history",
       order: 1,
     },
+    "orders.pending": {
+      menuCode: "orders.pending",
+      title: "menu.orders.pending",
+      parentMenuCode: "orders",
+      path: "/orders/pending",
+      icon: "clock",
+      order: 2,
+    },
   },
   permissionRegistry: {
     ...baseModel.permissionRegistry,
@@ -63,6 +71,7 @@ const model: PermissionStudioModel = {
     "zh-CN": {
       ...baseModel.translations["zh-CN"],
       "menu.orders.history": "订单历史",
+      "menu.orders.pending": "待处理订单",
       "widget.quick": "快捷组件",
       "widget.quickDesc": "快速访问组件",
     },
@@ -111,7 +120,7 @@ describe("ContractModuleEditor", () => {
     expect(onDraftChange).not.toHaveBeenCalled();
   });
 
-  it("selects only currently displayed menu descendants before transfer", async () => {
+  it("selects all menu descendants even when the branch is collapsed", async () => {
     const user = userEvent.setup();
     const onDraftChange = vi.fn();
     render(
@@ -122,13 +131,35 @@ describe("ContractModuleEditor", () => {
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: "收起订单" }));
+    expect(screen.queryByRole("checkbox", { name: "订单历史" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: "订单" }));
+    await user.click(screen.getByRole("button", { name: "展开订单" }));
     expect(screen.getByRole("checkbox", { name: "订单历史" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "待处理订单" })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "启用已选模块" }));
 
     expect(onDraftChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ contractMenus: { ISO: ["orders", "orders.history"] } }),
+      expect.objectContaining({
+        contractMenus: { ISO: ["orders", "orders.history", "orders.pending"] },
+      }),
     );
+  });
+
+  it("marks a parent partial and then selected as all children are selected", async () => {
+    const user = userEvent.setup();
+    render(
+      <ContractModuleEditor model={model} draft={createEmptyDraft()} onDraftChange={vi.fn()} />,
+    );
+
+    const parent = screen.getByRole("checkbox", { name: "订单" });
+    await user.click(screen.getByRole("checkbox", { name: "订单历史" }));
+    expect(parent).toBePartiallyChecked();
+    await user.click(screen.getByRole("checkbox", { name: "待处理订单" }));
+    expect(parent).toBeChecked();
+
+    await user.click(screen.getByRole("checkbox", { name: "订单历史" }));
+    expect(parent).toBePartiallyChecked();
   });
 
   it("clears selected modules when switching contracts", async () => {

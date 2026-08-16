@@ -19,9 +19,9 @@
 
 .previewing {
   padding: 4px 8px;
-  color: #052116;
+  color: var(--accent-contrast, #ffffff);
   border-radius: 999px;
-  background: var(--accent, #70e0b1);
+  background: var(--accent, #2563eb);
 }
 
 .grid {
@@ -35,9 +35,9 @@
 .modules {
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 12px;
-  background: rgb(0 0 0 / 13%);
+  background: var(--surface-subtle, #f7f9fc);
 }
 
 .conditions {
@@ -72,9 +72,9 @@
   min-width: 0;
   padding: 7px 8px;
   color: inherit;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 7px;
-  background: #091612;
+  background: var(--surface, #ffffff);
 }
 
 .permissions,
@@ -87,7 +87,7 @@
 .searchControl {
   display: grid;
   gap: 6px;
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.85rem;
 }
 
@@ -104,16 +104,16 @@
   display: grid;
   gap: 6px;
   padding: 10px;
-  border-left: 3px solid var(--surface-border, #254239);
-  background: rgb(0 0 0 / 12%);
+  border-left: 3px solid var(--surface-border, #d7e0ec);
+  background: var(--surface-subtle, #f7f9fc);
 }
 
 .permissionList li[data-status="effective"] {
-  border-left-color: var(--accent, #70e0b1);
+  border-left-color: var(--accent, #2563eb);
 }
 
 .permissionList li[data-status$="blocked"] {
-  border-left-color: #e9bb5b;
+  border-left-color: #d58a17;
 }
 
 .permissionList p {
@@ -125,7 +125,7 @@
 .evidence,
 .empty,
 .modules code {
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.85rem;
 }
 

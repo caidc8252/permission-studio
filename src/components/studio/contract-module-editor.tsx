@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   DualListEditor,
   type TransferItem,
   type TransferLabels,
   type TransferRequest,
+  type TransferSelectionChange,
+  type TransferSelectionState,
 } from "@/src/components/studio/dual-list-editor";
 import styles from "@/src/components/studio/contract-module-editor.module.css";
 import { setContractOwnerMembership, type PermissionDraft } from "@/src/domain/draft";
@@ -103,11 +105,10 @@ export function ContractModuleEditor({
     items.filter((item) => isVisibleMenu(model, item, expandedMenus));
   const localizeGroups = (items: TransferItem[]) =>
     items.map((item) => ({ ...item, group: localizedGroup(item.group) }));
-  const visibleMenuDescendants = (menuCode: string): string[] => {
+  const menuDescendants = (menuCode: string): string[] => {
     const descendants: string[] = [];
     const visited = new Set<string>([menuCode]);
     const collect = (parentCode: string) => {
-      if (!expandedMenus.has(parentCode)) return;
       for (const childCode of childrenByMenu.get(parentCode) ?? []) {
         if (visited.has(childCode)) continue;
         visited.add(childCode);
@@ -118,26 +119,61 @@ export function ContractModuleEditor({
     collect(menuCode);
     return descendants;
   };
-  const selectVisibleDescendants = (event: ChangeEvent<HTMLDivElement>) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") return;
-    const menuCode = target.closest("li")?.querySelector<HTMLElement>("[data-menu-code]")
-      ?.dataset.menuCode;
-    if (!menuCode || !childrenByMenu.has(menuCode)) return;
-    const panel = target.closest<HTMLElement>(
-      '[aria-label="可启用模块"], [aria-label="已启用模块"]',
+  const menuDepth = (menuCode: string): number => {
+    let depth = 0;
+    const visited = new Set<string>([menuCode]);
+    let parent = model.menuRegistry[menuCode]?.parentMenuCode;
+    while (parent && model.menuRegistry[parent] && !visited.has(parent)) {
+      visited.add(parent);
+      depth += 1;
+      parent = model.menuRegistry[parent].parentMenuCode;
+    }
+    return depth;
+  };
+  const menuIdsForSide = (side: TransferSelectionState["side"]): Set<string> =>
+    new Set(
+      (side === "available" ? view?.available : view?.assigned)
+        ?.filter((item) => item.kind === "menu")
+        .map((item) => item.id) ?? [],
     );
-    if (!panel) return;
-    const descendantCodes = new Set(visibleMenuDescendants(menuCode));
-    const checked = target.checked;
-    queueMicrotask(() => {
-      for (const checkbox of panel.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) {
-        const code = checkbox.closest("li")?.querySelector<HTMLElement>("[data-menu-code]")
-          ?.dataset.menuCode;
-        if (!code || !descendantCodes.has(code) || checkbox.checked === checked) continue;
-        checkbox.click();
-      }
-    });
+  const reduceTreeSelection = ({
+    side,
+    item,
+    checked,
+    selection,
+  }: TransferSelectionChange): ReadonlySet<string> => {
+    const next = new Set(selection);
+    if (item.kind !== "menu") {
+      if (checked) next.add(item.id);
+      else next.delete(item.id);
+      return next;
+    }
+
+    const menuIds = menuIdsForSide(side);
+    const affected = [item.id, ...menuDescendants(item.id)].filter((code) => menuIds.has(code));
+    for (const code of affected) {
+      if (checked) next.add(code);
+      else next.delete(code);
+    }
+
+    const deepestFirst = [...menuIds].sort(
+      (left, right) => menuDepth(right) - menuDepth(left) || left.localeCompare(right),
+    );
+    for (const menuCode of deepestFirst) {
+      const descendants = menuDescendants(menuCode).filter((code) => menuIds.has(code));
+      if (!descendants.length) continue;
+      if (descendants.every((code) => next.has(code))) next.add(menuCode);
+      else next.delete(menuCode);
+    }
+    return next;
+  };
+  const isTreeItemIndeterminate = ({ side, item, selection }: TransferSelectionState): boolean => {
+    if (item.kind !== "menu") return false;
+    const menuIds = menuIdsForSide(side);
+    const descendants = menuDescendants(item.id).filter((code) => menuIds.has(code));
+    if (!descendants.length) return false;
+    const selectedCount = descendants.filter((code) => selection.has(code)).length;
+    return selectedCount > 0 && selectedCount < descendants.length;
   };
   const toggleMenu = (menuCode: string) => {
     setExpandedMenus((current) => {
@@ -227,17 +263,17 @@ export function ContractModuleEditor({
                 <p>选择菜单和组件后，再启用或移除已选模块。</p>
               </div>
             </header>
-            <div onChangeCapture={selectVisibleDescendants}>
-              <DualListEditor
-                key={view.contractType}
-                ariaLabel={`${view.contractType}的模块`}
-                available={localizeGroups(visibleItems(view.available))}
-                assigned={localizeGroups(visibleItems(view.assigned))}
-                labels={transferLabels}
-                onTransfer={transfer}
-                renderItem={renderItem}
-              />
-            </div>
+            <DualListEditor
+              key={view.contractType}
+              ariaLabel={`${view.contractType}的模块`}
+              available={localizeGroups(visibleItems(view.available))}
+              assigned={localizeGroups(visibleItems(view.assigned))}
+              labels={transferLabels}
+              onTransfer={transfer}
+              renderItem={renderItem}
+              reduceSelection={reduceTreeSelection}
+              isItemIndeterminate={isTreeItemIndeterminate}
+            />
           </>
         ) : (
           <p className={styles.empty}>没有可编辑的合同类型</p>

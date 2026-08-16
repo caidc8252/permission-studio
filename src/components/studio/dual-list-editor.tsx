@@ -46,9 +46,21 @@ export interface DualListEditorProps {
   labels: TransferLabels;
   onTransfer: (request: TransferRequest) => void;
   renderItem?: (item: TransferItem) => React.ReactNode;
+  reduceSelection?: (change: TransferSelectionChange) => ReadonlySet<string>;
+  isItemIndeterminate?: (state: TransferSelectionState) => boolean;
 }
 
 type Side = "available" | "assigned";
+
+export interface TransferSelectionState {
+  side: Side;
+  item: TransferItem;
+  selection: ReadonlySet<string>;
+}
+
+export interface TransferSelectionChange extends TransferSelectionState {
+  checked: boolean;
+}
 
 interface TransferDragData {
   type: "transfer-item";
@@ -98,6 +110,7 @@ interface TransferRowProps {
   item: TransferItem;
   side: Side;
   checked: boolean;
+  indeterminate: boolean;
   onCheckedChange: (checked: boolean) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -112,6 +125,7 @@ function TransferRow({
   item,
   side,
   checked,
+  indeterminate,
   onCheckedChange,
   onDragStart,
   onDragEnd,
@@ -123,7 +137,12 @@ function TransferRow({
 }: TransferRowProps) {
   const rowRef = useRef<HTMLLIElement | null>(null);
   const handleRef = useRef<HTMLButtonElement | null>(null);
+  const checkboxRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (checkboxRef.current) checkboxRef.current.indeterminate = indeterminate;
+  }, [indeterminate]);
 
   useEffect(() => {
     const row = rowRef.current;
@@ -157,9 +176,13 @@ function TransferRow({
   return (
     <li ref={rowRef} className={styles.row} data-dragging={dragging || undefined}>
       <input
-        ref={itemRef}
+        ref={(element) => {
+          checkboxRef.current = element;
+          itemRef(element);
+        }}
         type="checkbox"
         aria-label={item.label}
+        aria-checked={indeterminate ? "mixed" : checked}
         checked={checked}
         onChange={(event) => onCheckedChange(event.target.checked)}
       />
@@ -192,6 +215,8 @@ interface TransferPanelProps {
   emptyLabel: string;
   dragHandle: (item: TransferItem) => string;
   dragPreview: (count: number) => string;
+  reduceSelection?: DualListEditorProps["reduceSelection"];
+  isItemIndeterminate?: DualListEditorProps["isItemIndeterminate"];
 }
 
 function TransferPanel({
@@ -209,6 +234,8 @@ function TransferPanel({
   emptyLabel,
   dragHandle,
   dragPreview,
+  reduceSelection,
+  isItemIndeterminate,
 }: TransferPanelProps) {
   const groups = useMemo(() => {
     const grouped = new Map<string, TransferItem[]>();
@@ -235,7 +262,14 @@ function TransferPanel({
                   item={item}
                   side={side}
                   checked={selection.has(item.id)}
+                  indeterminate={isItemIndeterminate?.({ side, item, selection }) ?? false}
                   onCheckedChange={(checked) => {
+                    if (reduceSelection) {
+                      onSelectionChange(
+                        new Set(reduceSelection({ side, item, checked, selection })),
+                      );
+                      return;
+                    }
                     const next = new Set(selection);
                     if (checked) next.add(item.id);
                     else next.delete(item.id);
@@ -270,6 +304,8 @@ export function DualListEditor({
   labels,
   onTransfer,
   renderItem = defaultRenderItem,
+  reduceSelection,
+  isItemIndeterminate,
 }: DualListEditorProps) {
   const [availableSelection, setAvailableSelection] = useState<Set<string>>(new Set());
   const [assignedSelection, setAssignedSelection] = useState<Set<string>>(new Set());
@@ -389,6 +425,8 @@ export function DualListEditor({
           emptyLabel={labels.empty}
           dragHandle={labels.dragHandle}
           dragPreview={labels.dragPreview}
+          reduceSelection={reduceSelection}
+          isItemIndeterminate={isItemIndeterminate}
         />
         <div className={styles.actions} aria-label={labels.actions}>
           <button
@@ -423,6 +461,8 @@ export function DualListEditor({
           emptyLabel={labels.empty}
           dragHandle={labels.dragHandle}
           dragPreview={labels.dragPreview}
+          reduceSelection={reduceSelection}
+          isItemIndeterminate={isItemIndeterminate}
         />
       </div>
       <p role="status" aria-live="polite" className={styles.srOnly}>

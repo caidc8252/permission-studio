@@ -14,21 +14,21 @@
 
 .steps li {
   padding: 9px 12px;
-  color: var(--muted, #9db7ae);
-  border: 1px solid var(--surface-border, #254239);
+  color: var(--muted, #64748b);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 9px;
 }
 
 .steps li[aria-current="step"] {
-  color: var(--text, #edf7f2);
-  border-color: var(--accent, #70e0b1);
+  color: var(--text, #172033);
+  border-color: var(--accent, #2563eb);
 }
 
 .stage {
   padding: 18px;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 14px;
-  background: rgb(0 0 0 / 13%);
+  background: var(--surface-subtle, #f7f9fc);
 }
 
 .stage > h2 {
@@ -43,7 +43,7 @@
 .review :global(article) {
   padding: 14px;
   margin-top: 12px;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 10px;
 }
 
@@ -96,9 +96,9 @@
   width: 100%;
   padding: 10px;
   color: inherit;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 9px;
-  background: #091612;
+  background: var(--surface, #ffffff);
   font: inherit;
 }
 
@@ -108,20 +108,20 @@
 
 .metadata p {
   margin: 0 0 8px;
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.82rem;
 }
 
 .metadata [aria-invalid="true"] {
-  border-color: #ffbd7a;
+  border-color: #d58a17;
 }
 
 .validation li {
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
 }
 
 .validation strong {
-  color: var(--text, #edf7f2);
+  color: var(--text, #172033);
 }
 
 .diff,
@@ -130,9 +130,9 @@
   max-height: 520px;
   padding: 14px;
   overflow: auto;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 9px;
-  background: #030a08;
+  background: #f8fafc;
   font-size: 0.76rem;
   line-height: 1.55;
   white-space: pre;
@@ -143,7 +143,7 @@
   gap: 8px;
   align-items: center;
   margin-top: 14px;
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
 }
 
 .actions {
@@ -157,29 +157,29 @@
 
 .warning,
 .recovery {
-  color: #ffd0a3;
+  color: var(--warning, #9a5b08);
 }
 
 .message,
 .success {
-  color: var(--accent, #70e0b1);
+  color: var(--accent-strong, #1d4ed8);
 }
 
 .recovery code {
   display: block;
   width: 100%;
   padding: 10px;
-  border: 1px solid #6d452b;
+  border: 1px solid #efb5af;
   border-radius: 8px;
-  background: #24150d;
+  background: var(--danger-soft, #fff1f0);
 }
 
 .prLink {
   display: inline-flex;
   padding: 9px 14px;
-  color: #052116;
+  color: var(--accent-contrast, #ffffff);
   border-radius: 9px;
-  background: var(--accent, #70e0b1);
+  background: var(--accent, #2563eb);
   font-weight: 700;
   text-decoration: none;
 }

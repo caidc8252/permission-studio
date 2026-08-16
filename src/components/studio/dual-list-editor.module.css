@@ -7,7 +7,7 @@
   display: grid;
   gap: 6px;
   max-width: 28rem;
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.85rem;
 }
 
@@ -15,9 +15,9 @@
   width: 100%;
   padding: 9px 10px;
   color: inherit;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 8px;
-  background: #091612;
+  background: var(--surface, #ffffff);
 }
 
 .editor {
@@ -30,14 +30,17 @@
 .panel {
   min-width: 0;
   min-height: 12rem;
+  max-height: min(60vh, 34rem);
   padding: 14px;
-  border: 1px solid var(--surface-border, #254239);
+  overflow-y: auto;
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 12px;
-  background: rgb(0 0 0 / 13%);
+  background: var(--surface-subtle, #f7f9fc);
+  scrollbar-gutter: stable;
 }
 
 .panel[data-drop-target] {
-  outline: 3px solid color-mix(in srgb, var(--accent, #70e0b1) 55%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--accent, #2563eb) 55%, transparent);
   outline-offset: 2px;
 }
 
@@ -51,7 +54,7 @@
 }
 
 .group h4 {
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.82rem;
 }
 
@@ -69,7 +72,7 @@
   gap: 9px;
   align-items: start;
   padding: 9px;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 8px;
 }
 
@@ -86,7 +89,7 @@
 .itemCopy code,
 .itemCopy span {
   overflow-wrap: anywhere;
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.78rem;
 }
 
@@ -107,9 +110,9 @@
   top: -9999px;
   left: -9999px;
   padding: 6px 9px;
-  color: #052116;
+  color: var(--accent-contrast, #ffffff);
   border-radius: 999px;
-  background: var(--accent, #70e0b1);
+  background: var(--accent, #2563eb);
   font-weight: 700;
 }
 
@@ -124,7 +127,7 @@
 }
 
 .empty {
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
 }
 
 .srOnly {

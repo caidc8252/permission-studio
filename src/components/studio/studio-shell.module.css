@@ -5,7 +5,7 @@
   border: 1px solid var(--surface-border);
   border-radius: 20px;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 25%);
+  box-shadow: 0 24px 70px rgb(30 64 175 / 10%);
 }
 
 .header,
@@ -41,7 +41,7 @@
 }
 
 .tabs button[aria-selected="true"] {
-  color: #052116;
+  color: var(--accent-contrast);
   border-color: var(--accent);
   background: var(--accent);
   font-weight: 700;
@@ -66,10 +66,10 @@
 .conflicts {
   margin: 14px 0;
   padding: 14px;
-  border: 1px solid #835c32;
+  border: 1px solid #e7b96c;
   border-radius: 10px;
-  color: #ffe0b5;
-  background: #24180d;
+  color: var(--warning);
+  background: var(--warning-soft);
 }
 
 .conflicts ul {
@@ -92,7 +92,7 @@
   border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--surface-border));
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 96%, transparent);
-  box-shadow: 0 18px 48px rgb(0 0 0 / 38%);
+  box-shadow: 0 18px 48px rgb(30 64 175 / 14%);
 }
 
 .traySummary {
@@ -110,15 +110,16 @@
 }
 
 .primaryAction {
-  color: #052116;
+  color: var(--accent-contrast);
   border-color: var(--accent);
   background: var(--accent);
   font-weight: 700;
 }
 
 .dangerAction {
-  border-color: #835c32;
-  background: #352015;
+  color: var(--danger);
+  border-color: #f1b8b3;
+  background: var(--danger-soft);
 }
 
 @media (max-width: 760px) {

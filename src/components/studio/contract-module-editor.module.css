@@ -8,9 +8,9 @@
 .content {
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--surface-border, #254239);
+  border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 12px;
-  background: rgb(0 0 0 / 13%);
+  background: var(--surface-subtle, #f7f9fc);
 }
 
 .sidebar {
@@ -37,7 +37,7 @@
 }
 
 .contractList button[aria-pressed="true"] {
-  border-color: var(--accent, #70e0b1);
+  border-color: var(--accent, #2563eb);
 }
 
 .content {
@@ -49,7 +49,7 @@
 .heading p,
 .empty {
   margin-top: 5px;
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
 }
 
 .item {
@@ -72,13 +72,13 @@
 }
 
 .branchToggle {
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   cursor: pointer;
 }
 
 .branchToggle:hover,
 .branchToggle:focus-visible {
-  color: var(--accent, #70e0b1);
+  color: var(--accent, #2563eb);
   outline: 1px solid currentcolor;
 }
 
@@ -90,7 +90,7 @@
 
 .itemCopy code,
 .itemCopy span {
-  color: var(--muted, #9db7ae);
+  color: var(--muted, #64748b);
   font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
