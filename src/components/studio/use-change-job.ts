@@ -61,14 +61,19 @@ interface ErrorBody {
 export const ACTIVE_CHANGE_JOB_KEY = "permission-studio:active-change";
 export const CHANGE_JOB_POLL_INTERVAL_MS = 1_200;
 
-function redactCredentials(value: string): string {
+export function redactClientSecrets(value: string): string {
   return value
-    .replace(/\bgh[pousr]_[A-Za-z0-9_]{8,}\b/gi, "[REDACTED]")
-    .replace(/(https?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, "$1[REDACTED]@");
+    .replace(/\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]+\b/gi, "[REDACTED]")
+    .replace(/(https?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, "$1[REDACTED]@")
+    .replace(/\b(?:Authorization\s*:\s*)?Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "[REDACTED]")
+    .replace(
+      /\b(?:token|password|passwd|secret|api[_-]?key)\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi,
+      "[REDACTED]",
+    );
 }
 
 function safeError(cause: unknown, fallback: string): string {
-  return cause instanceof HttpFlowError ? redactCredentials(cause.message) : fallback;
+  return cause instanceof HttpFlowError ? redactClientSecrets(cause.message) : fallback;
 }
 
 async function responseJson<T>(response: Response): Promise<T> {
@@ -169,7 +174,8 @@ export function useChangeJob(sourceSha = ""): ChangeJobController {
   }, []);
 
   const confirm = useCallback(async () => {
-    if (!job?.confirmationNonce || job.state !== "awaiting-confirmation") return;
+    if (!job?.confirmationNonce || job.state !== "awaiting-confirmation" || !job.diff?.trim())
+      return;
     setPending(true);
     setError(null);
     try {

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChangeReview } from "@/src/components/studio/change-review";
 import styles from "@/src/components/studio/pull-request-flow.module.css";
 import {
+  redactClientSecrets,
   useChangeJob,
   type ClientChangeJob,
   type PrepareIntent,
@@ -47,10 +48,10 @@ function isMetadataValueValid(value: string, maximum: number): boolean {
 }
 
 function sanitizeRecoveryText(value: string): string {
-  const redacted = value
-    .replace(/\bgh[pousr]_[A-Za-z0-9_]{8,}\b/gi, "[REDACTED]")
-    .replace(/\b(?:Bearer|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi, "[REDACTED]")
-    .replace(/[A-Za-z]:\\+(?:[^\\\s"'{}]+\\+)*[^\\\s"'{}]*/g, "[REDACTED]");
+  const redacted = redactClientSecrets(value).replace(
+    /[A-Za-z]:\\+(?:[^\\\s"'{}]+\\+)*[^\\\s"'{}]*/g,
+    "[REDACTED]",
+  );
   return [...redacted]
     .filter((character) => {
       const codePoint = character.codePointAt(0) ?? 0;
@@ -141,9 +142,16 @@ export function PullRequestFlow({
   const recoveryCommand = safeRecoveryCommand(job?.recoveryCommand);
   const failureSummary = job?.failureSummary ? sanitizeRecoveryText(job.failureSummary) : null;
   const prUrl = safePrUrl(job?.prUrl);
+  const hasVisibleDiff = Boolean(job?.diff?.trim());
+  const isFinalizationFailure =
+    job?.state === "failed" &&
+    (job.errorCode === "FINALIZE_FAILED" || job.errorCode === "PR_CREATE_FAILED");
+  const isValidationFailure = job?.state === "failed" && !isFinalizationFailure;
   const currentStage = !job
     ? 1
-    : job.state === "validating" || (job.state === "awaiting-confirmation" && !diffInspected)
+    : job.state === "validating" ||
+        isValidationFailure ||
+        (job.state === "awaiting-confirmation" && (!diffInspected || !hasVisibleDiff))
       ? 2
       : 3;
 
@@ -179,6 +187,26 @@ export function PullRequestFlow({
     changeReason("");
     setDiffInspected(false);
   };
+  const recoveryPanel = (validationFailure: boolean) => (
+    <div className={styles.recovery} role="alert">
+      <p>
+        {validationFailure
+          ? "变更校验失败，未进入最终确认"
+          : job?.errorCode === "PR_CREATE_FAILED"
+            ? "远端分支已保留，请手动创建 Draft PR"
+            : "推送失败，未创建 Draft PR"}
+      </p>
+      {recoveryCommand ? (
+        <code>{recoveryCommand}</code>
+      ) : job?.recoveryCommand ? (
+        <p>恢复命令未通过安全检查，已隐藏。</p>
+      ) : null}
+      {failureSummary ? <pre aria-label="脱敏失败日志">{failureSummary}</pre> : null}
+      <button type="button" disabled={busy} onClick={() => void discard()}>
+        丢弃并清理失败现场
+      </button>
+    </div>
+  );
 
   return (
     <section className={styles.flow} aria-label="Draft PR 创建流程">
@@ -270,15 +298,20 @@ export function PullRequestFlow({
                 </li>
               ))}
             </ul>
-          ) : (
+          ) : !isValidationFailure ? (
             <p role="status">正在等待校验结果…</p>
-          )}
-          {job.diff ? (
+          ) : null}
+          {hasVisibleDiff ? (
             <pre className={styles.diff} aria-label="服务器生成的完整 Git diff">
               {job.diff}
             </pre>
           ) : null}
-          {job.state === "awaiting-confirmation" ? (
+          {job.state === "awaiting-confirmation" && !hasVisibleDiff ? (
+            <p className={styles.warning} role="alert">
+              未收到完整 diff，无法进入最终确认。
+            </p>
+          ) : null}
+          {job.state === "awaiting-confirmation" && hasVisibleDiff ? (
             <label className={styles.inspection}>
               <input
                 type="checkbox"
@@ -289,10 +322,11 @@ export function PullRequestFlow({
               已检查完整 diff
             </label>
           ) : null}
+          {isValidationFailure ? recoveryPanel(true) : null}
         </section>
       ) : null}
 
-      {job ? (
+      {job && !isValidationFailure ? (
         <section className={styles.stage} aria-labelledby="pr-stage-three">
           <h2 id="pr-stage-three">第 3 步：最终确认</h2>
           {job.state === "validating" ? <p role="status">正在校验变更，请稍候。</p> : null}
@@ -301,8 +335,10 @@ export function PullRequestFlow({
               <p>最终确认后将推送远端分支并创建 Draft PR。</p>
               <button
                 type="button"
-                disabled={!diffInspected || busy}
-                onClick={() => void controller.confirm()}
+                disabled={!diffInspected || !hasVisibleDiff || busy}
+                onClick={() => {
+                  if (diffInspected && hasVisibleDiff) void controller.confirm();
+                }}
               >
                 确认推送并创建 Draft PR
               </button>
@@ -333,26 +369,7 @@ export function PullRequestFlow({
               </button>
             </div>
           ) : null}
-          {job.state === "failed" ? (
-            <div className={styles.recovery} role="alert">
-              <p>
-                {job.errorCode === "PR_CREATE_FAILED"
-                  ? "远端分支已保留，请手动创建 Draft PR"
-                  : job.errorCode === "FINALIZE_FAILED"
-                    ? "推送失败，未创建 Draft PR"
-                    : "变更校验或远端写入失败"}
-              </p>
-              {recoveryCommand ? (
-                <code>{recoveryCommand}</code>
-              ) : job.recoveryCommand ? (
-                <p>恢复命令未通过安全检查，已隐藏。</p>
-              ) : null}
-              {failureSummary ? <pre aria-label="脱敏失败日志">{failureSummary}</pre> : null}
-              <button type="button" disabled={busy} onClick={() => void discard()}>
-                丢弃并清理失败现场
-              </button>
-            </div>
-          ) : null}
+          {job.state === "failed" ? recoveryPanel(false) : null}
         </section>
       ) : null}
     </section>

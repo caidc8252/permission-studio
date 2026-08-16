@@ -115,6 +115,55 @@ describe("PullRequestFlow", () => {
     );
   });
 
+  it.each(["", "  \n\t"])(
+    "fails closed when an awaiting job has no visible diff (%j)",
+    async (diff) => {
+      const user = userEvent.setup();
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(Response.json({ ...awaitingJob, diff }, { status: 202 }));
+      vi.stubGlobal("fetch", fetchMock);
+      render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
+
+      await fillValidMetadata(user);
+      await user.click(screen.getByRole("button", { name: "校验变更" }));
+
+      expect(
+        await screen.findByRole("heading", { name: "第 2 步：校验与完整 diff" }),
+      ).toBeVisible();
+      expect(screen.queryByLabelText("服务器生成的完整 Git diff")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("已检查完整 diff")).not.toBeInTheDocument();
+      const confirm = screen.getByRole("button", { name: "确认推送并创建 Draft PR" });
+      expect(confirm).toBeDisabled();
+      await user.click(confirm);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/confirm"))).toBe(false);
+    },
+  );
+
+  it("keeps a preparation failure in validation stage", async () => {
+    const user = userEvent.setup();
+    const failedJob = {
+      ...awaitingJob,
+      state: "failed" as const,
+      confirmationNonce: "",
+      errorCode: "PREPARE_FAILED",
+      validationSteps: [],
+      diff: "",
+      failureSummary: '{"error":"validation failed"}',
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(failedJob, { status: 202 })));
+    render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
+
+    await fillValidMetadata(user);
+    await user.click(screen.getByRole("button", { name: "校验变更" }));
+
+    expect(await screen.findByText("变更校验失败，未进入最终确认")).toBeVisible();
+    expect(screen.getByText("2. 校验与 diff")).toHaveAttribute("aria-current", "step");
+    expect(screen.getByText("3. 最终确认")).not.toHaveAttribute("aria-current");
+    expect(screen.queryByRole("heading", { name: "第 3 步：最终确认" })).not.toBeInTheDocument();
+  });
+
   it("discards a prepared result without triggering finalization", async () => {
     const user = userEvent.setup();
     const fetchMock = vi
@@ -149,7 +198,7 @@ describe("PullRequestFlow", () => {
         errorCode === "PR_CREATE_FAILED"
           ? "gh pr create --repo org/repo --base develop --head permission-studio/id --draft"
           : "powershell -Command Get-Content C:\\private\\credential.txt",
-      failureSummary: `[REDACTED]\n${"x".repeat(3_975)} ghp_supersecrettoken123 at C:\\private\\credential.txt`,
+      failureSummary: `[REDACTED]\n${"x".repeat(3_900)} github_pat_supersecret123 Authorization: Bearer bearer-secret-456 token=token-secret-789 ghp_supersecrettoken123 at C:\\private\\credential.txt`,
     };
     const fetchMock = vi
       .fn()
@@ -169,6 +218,9 @@ describe("PullRequestFlow", () => {
     expect(await screen.findByText(copy)).toBeVisible();
     expect(screen.getByLabelText("脱敏失败日志")).toHaveTextContent("[REDACTED]");
     expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("ghp_");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("github_pat_");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("bearer-secret-456");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("token-secret-789");
     expect(screen.queryByText(/ghp_supersecrettoken123/)).not.toBeInTheDocument();
     expect(screen.queryByText(/private\\credential/)).not.toBeInTheDocument();
     if (errorCode === "PR_CREATE_FAILED") {
@@ -176,7 +228,42 @@ describe("PullRequestFlow", () => {
     } else {
       expect(screen.queryByText(failedJob.recoveryCommand)).not.toBeInTheDocument();
     }
+    expect(screen.getByText("3. 最终确认")).toHaveAttribute("aria-current", "step");
+    expect(screen.getByText("2. 校验与 diff")).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("button", { name: "丢弃并清理失败现场" })).toBeEnabled();
+  });
+
+  it("hides a credential-bearing recovery command", async () => {
+    const user = userEvent.setup();
+    const credentialCommand =
+      "gh pr create --repo org/repo --title github_pat_supersecret123 --draft";
+    const failedJob = {
+      ...awaitingJob,
+      state: "failed" as const,
+      confirmationNonce: "",
+      errorCode: "PR_CREATE_FAILED",
+      recoveryCommand: credentialCommand,
+      failureSummary: "Authorization: Bearer bearer-secret-456 token=token-secret-789",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(awaitingJob, { status: 202 }))
+      .mockResolvedValueOnce(
+        Response.json({ code: "PR_CREATE_FAILED", message: "远端写入失败" }, { status: 502 }),
+      )
+      .mockResolvedValueOnce(Response.json(failedJob));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
+
+    await fillValidMetadata(user);
+    await user.click(screen.getByRole("button", { name: "校验变更" }));
+    await user.click(await screen.findByLabelText("已检查完整 diff"));
+    await user.click(screen.getByRole("button", { name: "确认推送并创建 Draft PR" }));
+
+    expect(await screen.findByText("恢复命令未通过安全检查，已隐藏。")).toBeVisible();
+    expect(screen.queryByText(credentialCommand)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("bearer-secret-456");
+    expect(screen.getByLabelText("脱敏失败日志")).not.toHaveTextContent("token-secret-789");
   });
 
   it("starts a new change after success and clears completed state and draft", async () => {

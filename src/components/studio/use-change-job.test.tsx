@@ -144,6 +144,19 @@ describe("useChangeJob", () => {
     expect(result.current.job).toEqual(completedJob);
   });
 
+  it.each(["", "  \n\t"])("does not confirm without a visible server diff (%j)", async (diff) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(Response.json({ ...awaitingJob, diff }, { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useChangeJob(validModel.sourceSha));
+
+    await act(() => result.current.prepare(intent));
+    await act(() => result.current.confirm());
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/confirm"))).toBe(false);
+  });
+
   it.each([
     ["FINALIZE_FAILED", "推送失败，请检查远端状态。"],
     ["PR_CREATE_FAILED", "Draft PR 创建失败，请使用恢复信息。"],
@@ -191,5 +204,30 @@ describe("useChangeJob", () => {
     expect(result.current.job).toBeNull();
     expect(result.current.message).toBe("变更草稿已丢弃");
     expect(window.sessionStorage.getItem("permission-studio:active-change")).toBeNull();
+  });
+
+  it("redacts GitHub and authorization credentials from response errors", async () => {
+    const secrets = [
+      "github_pat_supersecret123",
+      "Authorization: Bearer bearer-secret-456",
+      "token=token-secret-789",
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { code: "PREPARE_FAILED", message: `远端失败 ${secrets.join(" ")}` },
+            { status: 502 },
+          ),
+        ),
+    );
+    const { result } = renderHook(() => useChangeJob(validModel.sourceSha));
+
+    await act(() => result.current.prepare(intent));
+
+    expect(result.current.error).toContain("[REDACTED]");
+    for (const secret of secrets) expect(result.current.error).not.toContain(secret);
   });
 });
