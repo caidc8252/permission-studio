@@ -145,7 +145,6 @@
   }
 
   .actions {
-    grid-template-columns: 1fr 1fr;
-    order: 2;
+    grid-template-columns: 1fr;
   }
 }

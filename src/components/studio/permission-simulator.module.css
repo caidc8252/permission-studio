@@ -142,4 +142,14 @@
   .grid {
     grid-template-columns: 1fr;
   }
+
+  .conditions label,
+  .contractControl {
+    flex-wrap: wrap;
+  }
+
+  .conditions label code {
+    margin-left: 0;
+    overflow-wrap: anywhere;
+  }
 }

@@ -121,14 +121,14 @@
   background: #352015;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .studio,
   .modelState {
     padding: 18px;
   }
 
   .tray {
-    bottom: 8px;
+    position: static;
   }
 
   .trayActions {

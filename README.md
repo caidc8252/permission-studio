@@ -73,3 +73,16 @@ git diff --check
 ## 未来迁移到 GitHub App
 
 当前 GitHub 边界集中在服务端 `gh` 客户端、仓库缓存和 job finalization。未来改成 GitHub App 时，可替换身份获取、Git 数据访问、push/PR 创建和持久化 job 实现；权限模型、AST 编辑、验证序列、HTTP 意图协议和前端确认流程无需改成在浏览器里持有凭证。
+
+### UX smoke test
+
+1. Open `http://127.0.0.1:3100` and verify the loaded `develop` SHA.
+2. Add two permissions to one preset role with checkboxes and the transfer button.
+3. Remove one permission with the pointer drag handle.
+4. Switch to a second role and back; verify both draft deltas remain.
+5. Enable one menu and one widget for a non-TEST contract.
+6. Verify Widgets is a separate root group and no widget-to-menu relationship is implied.
+7. Open simulation and verify “正在预览草稿” and changed effective evidence.
+8. Open change review, undo one item, and verify totals update.
+9. Resize below 760 px; verify stacked panels and button-based transfer remain usable.
+10. Prepare only against mocked/local validation during development; do not confirm a real remote push.

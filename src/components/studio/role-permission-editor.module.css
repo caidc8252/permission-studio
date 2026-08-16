@@ -60,6 +60,11 @@
   text-align: left;
 }
 
+.roleList button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .roleList button[aria-pressed="true"] {
   border-color: var(--accent, #70e0b1);
 }
@@ -114,5 +119,9 @@
 
   .heading {
     display: grid;
+  }
+
+  .heading label {
+    min-width: 0;
   }
 }

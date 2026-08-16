@@ -126,6 +126,7 @@
 
 .diff,
 .recovery pre {
+  max-width: 100%;
   max-height: 520px;
   padding: 14px;
   overflow: auto;
@@ -183,7 +184,7 @@
   text-decoration: none;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 760px) {
   .steps {
     grid-template-columns: 1fr;
   }
