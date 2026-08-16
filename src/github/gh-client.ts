@@ -39,6 +39,15 @@ export interface GhPreflight {
 
 export interface GhClient {
   preflight(): Promise<GhPreflight>;
+  getViewer(): Promise<GhViewer>;
+  createDraftPullRequest(input: {
+    repo: string;
+    base: string;
+    head: string;
+    draft: true;
+    title: string;
+    bodyFile: string;
+  }): Promise<string>;
 }
 
 const baseFailure = (errorCode: GhPreflightErrorCode): GhPreflight => ({
@@ -58,7 +67,48 @@ function parseJson<T>(schema: z.ZodType<T>, raw: string): T | undefined {
 }
 
 export function createGhClient(runner: CommandRunner): GhClient {
+  const getViewer = async (): Promise<GhViewer> => {
+    const result = await runner.run({
+      executable: "gh",
+      args: ["api", "user"],
+      timeoutMs: 15_000,
+    });
+    const parsed = parseJson(viewerSchema, result.stdout);
+    if (!parsed) throw new Error("GitHub viewer response is invalid");
+    return {
+      ...parsed,
+      noreplyEmail: `${parsed.id}+${parsed.login}@users.noreply.github.com`,
+    };
+  };
+
   return {
+    getViewer,
+    async createDraftPullRequest(input) {
+      const result = await runner.run({
+        executable: "gh",
+        args: [
+          "pr",
+          "create",
+          "--repo",
+          input.repo,
+          "--base",
+          input.base,
+          "--head",
+          input.head,
+          "--draft",
+          "--title",
+          input.title,
+          "--body-file",
+          input.bodyFile,
+        ],
+        timeoutMs: 120_000,
+      });
+      const url = result.stdout.trim();
+      if (!/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/u.test(url)) {
+        throw new Error("GitHub PR response is invalid");
+      }
+      return url;
+    },
     async preflight() {
       try {
         await runner.run({
@@ -76,22 +126,7 @@ export function createGhClient(runner: CommandRunner): GhClient {
 
       let viewer: GhViewer;
       try {
-        const result = await runner.run({
-          executable: "gh",
-          args: ["api", "user"],
-          timeoutMs: 15_000,
-        });
-        const parsed = parseJson(viewerSchema, result.stdout);
-        if (!parsed) {
-          return {
-            ...baseFailure("GH_RESPONSE_INVALID"),
-            authenticated: true,
-          };
-        }
-        viewer = {
-          ...parsed,
-          noreplyEmail: `${parsed.id}+${parsed.login}@users.noreply.github.com`,
-        };
+        viewer = await getViewer();
       } catch {
         return {
           ...baseFailure("GH_RESPONSE_INVALID"),

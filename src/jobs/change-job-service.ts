@@ -1,5 +1,7 @@
 import type { PermissionChange } from "@/src/domain/change";
 import type { RepositoryCache, WorktreeHandle } from "@/src/git/repository-cache";
+import type { GhViewer } from "@/src/github/gh-client";
+import { buildPullRequestBody } from "@/src/github/pr-body";
 import {
   type ChangeJob,
   type ChangeJobStore,
@@ -7,9 +9,21 @@ import {
   toPublicChangeJob,
 } from "@/src/jobs/change-job-store";
 import { ALLOWED_CATALOG_PATHS, type ValidationResult } from "@/src/jobs/validation";
+import type { CommandRunner } from "@/src/system/command-runner";
 
 const PREPARED_TTL_MS = 30 * 60 * 1000;
 const MAX_DIFF_BYTES = 1024 * 1024;
+
+function gitRemoteEnvironment(): Readonly<Record<string, string>> {
+  const proxy = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY ?? "";
+  return {
+    GIT_CONFIG_COUNT: "2",
+    GIT_CONFIG_KEY_0: "http.proxy",
+    GIT_CONFIG_VALUE_0: proxy,
+    GIT_CONFIG_KEY_1: "https.proxy",
+    GIT_CONFIG_VALUE_1: proxy,
+  };
+}
 
 export class ChangeJobError extends Error {
   constructor(
@@ -32,12 +46,26 @@ interface ChangeJobServiceOptions {
   validate: (worktreePath: string) => Promise<ValidationResult>;
   now?: () => Date;
   nonce: () => string;
+  finalization?: {
+    runner: CommandRunner;
+    getViewer: () => Promise<GhViewer>;
+    createDraftPullRequest: (input: {
+      repo: string;
+      base: string;
+      head: string;
+      draft: true;
+      title: string;
+      bodyFile: string;
+    }) => Promise<string>;
+    writeBody: (worktreePath: string, body: string) => Promise<string>;
+  };
 }
 
 export interface ChangeJobService {
   prepareChange(change: PermissionChange): Promise<PublicChangeJob>;
   getChangeJob(id: string): PublicChangeJob | null;
   discardPreparedChange(id: string): Promise<void>;
+  finalizeChange(id: string, confirmationNonce: string): Promise<PublicChangeJob>;
   getInternalJob(id: string): ChangeJob | undefined;
 }
 
@@ -150,6 +178,105 @@ export function createChangeJobService(options: ChangeJobServiceOptions): Change
       }
       await discardWorktree(job.worktree);
       options.store.delete(id);
+    },
+
+    async finalizeChange(id, confirmationNonce) {
+      const job = options.store.get(id);
+      if (!job) throw new ChangeJobError("CHANGE_NOT_FOUND", 404, "Change request was not found");
+      if (job.state === "completed") return toPublicChangeJob(job);
+      if (job.state !== "awaiting-confirmation") {
+        throw new ChangeJobError(
+          "CHANGE_NOT_CONFIRMABLE",
+          409,
+          "Change request cannot be confirmed",
+        );
+      }
+      if (now().getTime() >= Date.parse(job.expiresAt)) {
+        await discardWorktree(job.worktree);
+        options.store.delete(id);
+        throw new ChangeJobError("CHANGE_EXPIRED", 410, "Prepared change has expired");
+      }
+      if (!confirmationNonce || confirmationNonce !== job.confirmationNonce) {
+        throw new ChangeJobError("CONFIRMATION_MISMATCH", 403, "Confirmation nonce is invalid");
+      }
+      if (!options.finalization || !job.worktree) {
+        throw new ChangeJobError("FINALIZATION_UNAVAILABLE", 503, "Finalization is unavailable");
+      }
+
+      job.state = "finalizing";
+      job.confirmationNonce = "";
+      options.store.set(job);
+      let pushed = false;
+      try {
+        const revision = await options.cache.refresh();
+        if (revision.sha !== job.change.baseSha) {
+          throw new ChangeJobError("STALE_MODEL", 409, "develop changed after validation");
+        }
+        const viewer = await options.finalization.getViewer();
+        const git = (
+          args: readonly string[],
+          timeoutMs = 120_000,
+          env?: Readonly<Record<string, string>>,
+        ) =>
+          options.finalization!.runner.run({
+            executable: "git",
+            args,
+            cwd: job.worktree!.path,
+            timeoutMs,
+            maxOutputBytes: 4 * 1024 * 1024,
+            ...(env ? { env } : {}),
+          });
+        await git(["config", "user.name", viewer.login]);
+        await git(["config", "user.email", viewer.noreplyEmail]);
+        await git(["switch", "-c", job.branchName]);
+        await git(["add", "--", ...ALLOWED_CATALOG_PATHS]);
+        await git(["commit", "-m", "chore(permissions): apply Permission Studio change"]);
+        await git(
+          ["push", "origin", `HEAD:refs/heads/${job.branchName}`],
+          300_000,
+          gitRemoteEnvironment(),
+        );
+        pushed = true;
+
+        const body = buildPullRequestBody({
+          change: job.change,
+          actor: viewer.login,
+          touchedFiles: job.touchedFiles,
+          validationSteps: job.validationSteps,
+        });
+        const bodyFile = await options.finalization.writeBody(job.worktree.path, body);
+        job.prUrl = await options.finalization.createDraftPullRequest({
+          repo: "Newland-Payment-Technology-US-Co-Ltd/pep-webapp",
+          base: "develop",
+          head: job.branchName,
+          draft: true,
+          title: "chore(permissions): update permission catalogs",
+          bodyFile,
+        });
+        job.state = "completed";
+        await discardWorktree(job.worktree);
+        job.worktree = undefined;
+        options.store.set(job);
+        return toPublicChangeJob(job);
+      } catch (error) {
+        await discardWorktree(job.worktree).catch(() => undefined);
+        job.worktree = undefined;
+        job.state = "failed";
+        const failure =
+          error instanceof ChangeJobError
+            ? error
+            : new ChangeJobError(
+                pushed ? "PR_CREATE_FAILED" : "FINALIZE_FAILED",
+                502,
+                pushed ? "Branch pushed but Draft PR creation failed" : "Finalization failed",
+              );
+        job.errorCode = failure.code;
+        if (pushed) {
+          job.recoveryCommand = `gh pr create --repo Newland-Payment-Technology-US-Co-Ltd/pep-webapp --base develop --head ${job.branchName} --draft`;
+        }
+        options.store.set(job);
+        throw failure;
+      }
     },
 
     getInternalJob(id) {

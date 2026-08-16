@@ -43,6 +43,41 @@ const commandError = (code: "COMMAND_FAILED" | "COMMAND_START_FAILED"): CommandE
   });
 
 describe("createGhClient", () => {
+  it("creates a draft PR with exact repository, base, head, title, and body file", async () => {
+    const runner = new FakeRunner([ok("https://github.com/org/repo/pull/42\n")]);
+
+    const url = await createGhClient(runner).createDraftPullRequest({
+      repo: "Newland-Payment-Technology-US-Co-Ltd/pep-webapp",
+      base: "develop",
+      head: "permission-studio/01j5z",
+      draft: true,
+      title: "chore(permissions): update permission catalogs",
+      bodyFile: "C:\\owned\\pr-body.md",
+    });
+
+    expect(url).toBe("https://github.com/org/repo/pull/42");
+    expect(runner.calls).toEqual([
+      [
+        "gh",
+        [
+          "pr",
+          "create",
+          "--repo",
+          "Newland-Payment-Technology-US-Co-Ltd/pep-webapp",
+          "--base",
+          "develop",
+          "--head",
+          "permission-studio/01j5z",
+          "--draft",
+          "--title",
+          "chore(permissions): update permission catalogs",
+          "--body-file",
+          "C:\\owned\\pr-body.md",
+        ],
+      ],
+    ]);
+  });
+
   it("checks auth, viewer identity, and exact repository access without reading a token", async () => {
     const runner = new FakeRunner([
       ok(),
