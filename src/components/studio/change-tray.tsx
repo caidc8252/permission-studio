@@ -10,6 +10,7 @@ export interface ChangeTrayProps {
   onReview: () => void;
   onGeneratePr?: () => void;
   disabled?: boolean;
+  reviewDisabled?: boolean;
   generatePrDisabled?: boolean;
 }
 
@@ -35,6 +36,7 @@ export function ChangeTray({
   onReview,
   onGeneratePr,
   disabled = false,
+  reviewDisabled = false,
   generatePrDisabled = false,
 }: ChangeTrayProps) {
   const additions = impact.addedRolePermissions.length + impact.addedContractOwners.length;
@@ -68,7 +70,7 @@ export function ChangeTray({
         >
           丢弃全部
         </button>
-        <button type="button" onClick={onReview}>
+        <button type="button" disabled={reviewDisabled} onClick={onReview}>
           查看变更
         </button>
         <button

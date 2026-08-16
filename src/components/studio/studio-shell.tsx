@@ -198,6 +198,7 @@ export function StudioShell({
     [draft, model],
   );
   const jobActive = activeJob !== null || hasStoredJob || flowPending;
+  const draftLocked = jobActive || loading;
   const currentObject =
     task === "roles" && selectedRoleCode
       ? { scenario: `role:${selectedRoleCode}`, label: translatedRole(model!, selectedRoleCode) }
@@ -296,15 +297,17 @@ export function StudioShell({
         ))}
       </nav>
 
-      {view === "tasks" ? (
+      {tasks.map((item) => (
         <section
-          id={`studio-panel-${task}`}
+          key={item.id}
+          id={`studio-panel-${item.id}`}
           className={styles.panel}
           role="tabpanel"
-          aria-labelledby={`studio-tab-${task}`}
+          aria-labelledby={`studio-tab-${item.id}`}
+          hidden={view !== "tasks" || task !== item.id}
         >
-          {task === "roles" ? (
-            <fieldset className={styles.editorLock} disabled={jobActive}>
+          {item.id === "roles" ? (
+            <fieldset className={styles.editorLock} disabled={draftLocked}>
               <RolePermissionEditor
                 model={model}
                 draft={draft}
@@ -314,8 +317,8 @@ export function StudioShell({
               />
             </fieldset>
           ) : null}
-          {task === "contracts" ? (
-            <fieldset className={styles.editorLock} disabled={jobActive}>
+          {item.id === "contracts" ? (
+            <fieldset className={styles.editorLock} disabled={draftLocked}>
               <ContractModuleEditor
                 model={model}
                 draft={draft}
@@ -325,9 +328,9 @@ export function StudioShell({
               />
             </fieldset>
           ) : null}
-          {task === "simulation" ? <PermissionSimulator model={model} draft={draft} /> : null}
+          {item.id === "simulation" ? <PermissionSimulator model={model} draft={draft} /> : null}
         </section>
-      ) : null}
+      ))}
 
       {view === "review" ? (
         <section className={styles.auxiliary} aria-label="变更审查">
@@ -337,7 +340,7 @@ export function StudioShell({
             </button>
             <button
               type="button"
-              disabled={jobActive}
+              disabled={draftLocked}
               onClick={() => {
                 setFlowOpen(true);
                 setView("pr");
@@ -346,7 +349,12 @@ export function StudioShell({
               继续生成 Draft PR
             </button>
           </header>
-          <ChangeReview model={model} draft={draft} onDraftChange={setDraft} disabled={jobActive} />
+          <ChangeReview
+            model={model}
+            draft={draft}
+            onDraftChange={setDraft}
+            disabled={draftLocked}
+          />
         </section>
       ) : null}
 
@@ -369,6 +377,7 @@ export function StudioShell({
             draft={draft}
             impact={impact}
             stale={conflicts.length > 0}
+            pending={loading}
             onDraftChange={setDraft}
             onJobChange={handleJobChange}
             onPendingChange={setFlowPending}
@@ -379,7 +388,8 @@ export function StudioShell({
       <ChangeTray
         impact={impact}
         currentObject={view === "tasks" ? currentObject : undefined}
-        disabled={jobActive}
+        disabled={draftLocked}
+        reviewDisabled={loading}
         generatePrDisabled={conflicts.length > 0}
         onDiscardAll={() => setDraft(createEmptyDraft())}
         onReview={() => setView("review")}

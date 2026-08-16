@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -35,6 +35,17 @@ import type { PermissionStudioModel } from "@/src/domain/model";
 import { validModel } from "@/tests/fixtures/model";
 
 const model = validModel as unknown as PermissionStudioModel;
+
+function expectStableTabPanels() {
+  for (const tab of screen.getAllByRole("tab")) {
+    const controls = tab.getAttribute("aria-controls");
+    expect(controls).toBeTruthy();
+    const panel = document.getElementById(controls!);
+    expect(panel).not.toBeNull();
+    expect(panel).toHaveAttribute("role", "tabpanel");
+    expect(panel).toHaveAttribute("aria-labelledby", tab.id);
+  }
+}
 
 afterEach(() => {
   cleanup();
@@ -134,17 +145,67 @@ describe("StudioShell", () => {
     expect(contractsTab).toHaveAttribute("aria-selected", "false");
     expect(simulationTab).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tabpanel", { name: "角色权限" })).toBeVisible();
+    expectStableTabPanels();
+    expect(document.getElementById("studio-panel-contracts")).not.toBeVisible();
+    expect(document.getElementById("studio-panel-simulation")).not.toBeVisible();
 
     await user.click(screen.getByRole("checkbox", { name: "管理订单" }));
     await user.click(screen.getByRole("button", { name: "添加已选权限" }));
     await user.click(screen.getByRole("button", { name: "查看变更" }));
-    expect(screen.getByRole("heading", { name: "业务变更检查" })).toBeVisible();
-    expect(screen.getByText("orders.manage")).toBeVisible();
+    const review = screen.getByRole("region", { name: "变更审查" });
+    expect(within(review).getByRole("heading", { name: "业务变更检查" })).toBeVisible();
+    expect(within(review).getByText("orders.manage")).toBeVisible();
+    expectStableTabPanels();
 
     await user.click(screen.getByRole("button", { name: "生成 Draft PR" }));
-    expect(screen.getByRole("region", { name: "Draft PR 创建流程" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "第 1 步：检查业务变更" })).toBeVisible();
-    expect(screen.getByText("orders.manage")).toBeVisible();
+    const flow = screen.getByRole("region", { name: "Draft PR 创建流程" });
+    expect(flow).toBeVisible();
+    expect(within(flow).getByRole("heading", { name: "第 1 步：检查业务变更" })).toBeVisible();
+    expect(within(flow).getByText("orders.manage")).toBeVisible();
+    expectStableTabPanels();
+  });
+
+  it("fails closed across every draft mutation surface while develop refreshes", async () => {
+    const user = userEvent.setup();
+    const nextModel = structuredClone(model);
+    nextModel.sourceSha = "e".repeat(40);
+    let resolveLoad!: (value: PermissionStudioModel) => void;
+    const loadModel = vi.fn(
+      () =>
+        new Promise<PermissionStudioModel>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+    render(<StudioShell initialModel={model} loadModel={loadModel} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "管理订单" }));
+    await user.click(screen.getByRole("button", { name: "添加已选权限" }));
+    await user.click(screen.getByRole("button", { name: "生成 Draft PR" }));
+    await user.type(screen.getByRole("textbox", { name: "PR 标题" }), "更新订单管理权限配置");
+    await user.type(
+      screen.getByRole("textbox", { name: "变更原因" }),
+      "为运营团队开放订单管理权限",
+    );
+    await user.click(screen.getByRole("button", { name: "刷新 develop" }));
+
+    expect(screen.getByRole("button", { name: "校验中…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "丢弃全部" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "查看变更" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "生成 Draft PR" })).toBeDisabled();
+    await user.click(screen.getByRole("tab", { name: "角色权限" }));
+    expect(screen.getByRole("searchbox", { name: "搜索角色" })).toBeDisabled();
+    await user.click(screen.getByRole("tab", { name: "合同模块" }));
+    expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeDisabled();
+    await user.click(screen.getByRole("tab", { name: "权限模拟" }));
+    expect(screen.getByRole("radio", { name: "普通成员" })).toBeEnabled();
+
+    resolveLoad(nextModel);
+
+    expect(await screen.findByText(nextModel.sourceSha)).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "角色权限" }));
+    expect(screen.getByRole("searchbox", { name: "搜索角色" })).toBeEnabled();
+    expect(screen.getByText("草稿中有 1 项变更")).toBeVisible();
+    expect(screen.getByRole("button", { name: "生成 Draft PR" })).toBeEnabled();
   });
 
   it("supports keyboard navigation between task tabs", async () => {

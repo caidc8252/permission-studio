@@ -170,8 +170,8 @@ export function PullRequestFlow({
   }, [job, onJobChange]);
 
   useEffect(() => {
-    onPendingChange?.(busy);
-  }, [busy, onPendingChange]);
+    onPendingChange?.(controller.pending);
+  }, [controller.pending, onPendingChange]);
 
   const changeTitle = (value: string) => {
     if (suppliedTitle === undefined) setLocalTitle(value);
