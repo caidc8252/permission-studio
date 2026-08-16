@@ -85,6 +85,26 @@ h1 {
   font-size: 1.4rem;
 }
 
+.health-detail {
+  color: var(--muted);
+}
+
+.command-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.command-help code,
+.target-note span {
+  padding: 6px 9px;
+  border: 1px solid var(--surface-border);
+  border-radius: 7px;
+  background: rgb(0 0 0 / 18%);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+}
+
 dl {
   display: grid;
   gap: 12px;
@@ -104,6 +124,15 @@ dt {
 dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.target-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  color: var(--muted);
 }
 
 @media (max-width: 720px) {
