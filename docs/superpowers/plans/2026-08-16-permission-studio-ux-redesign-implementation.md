@@ -75,7 +75,7 @@
   - `setContractOwnerMembership(draft, model, contractType, kind, ownerCodes): PermissionDraft`
   - `discardRoleDraft(draft, roleCode): PermissionDraft`
   - `discardContractDraft(draft, contractType): PermissionDraft`
-  - `discardDraftItem(draft, item: DraftItemRef): PermissionDraft`
+  - `discardDraftItem(draft, model, item: DraftItemRef): PermissionDraft`
   - `draftStorageKey(sourceSha): string`
   - `serializeDraftSession(stored: StoredDraft): string`
   - `restoreDraftSession(raw, expectedSha): StoredDraft | null`
@@ -157,7 +157,7 @@ export function discardContractDraft(
 }
 ```
 
-Implement `setContractOwnerMembership` with the existing menu/widget validation, make `toggleRolePermission` and `toggleContractOwner` delegate to the set functions, and define `discardDraftItem` for one role permission, menu, or widget change by restoring its baseline membership.
+Implement `setContractOwnerMembership` with the existing menu/widget validation, make `toggleRolePermission` and `toggleContractOwner` delegate to the set functions, and define `discardDraftItem(draft, model, item)` for one role permission, menu, or widget change by restoring that item's membership from the model baseline while preserving the other overrides for the same owner.
 
 - [ ] **Step 4: Add failing session and stale replay tests**
 
