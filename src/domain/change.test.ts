@@ -28,9 +28,12 @@ describe("permission change protocol", () => {
     ).toBe("chore: update permissions");
   });
 
-  it.each(["short", "x".repeat(121), "bad\ntitle"])("rejects PR title %j", (title) => {
-    expect(() => normalizePermissionChange({ ...validChange, title })).toThrow();
-  });
+  it.each(["short", "x".repeat(121), "bad\ntitle", "safe title\u0085suffix"])(
+    "rejects PR title %j",
+    (title) => {
+      expect(() => normalizePermissionChange({ ...validChange, title })).toThrow();
+    },
+  );
 
   it("normalizes leaf arrays and removes empty entries", () => {
     expect(

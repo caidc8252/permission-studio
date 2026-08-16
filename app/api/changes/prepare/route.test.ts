@@ -68,6 +68,9 @@ describe("POST /api/changes/prepare", () => {
     const { handler } = setup();
     expect((await handler(request({ ...intent, title: undefined }))).status).toBe(400);
     expect((await handler(request({ ...intent, title: "bad\ntitle" }))).status).toBe(400);
+    expect((await handler(request({ ...intent, title: "safe title\u0085suffix" }))).status).toBe(
+      400,
+    );
   });
 
   it("rejects stale models and unknown role, permission, and contract references", async () => {

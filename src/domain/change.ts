@@ -27,7 +27,7 @@ function findOverlap(left: readonly string[], right: readonly string[]): string[
 function hasControlCharacter(value: string): boolean {
   return [...value].some((character) => {
     const codePoint = character.codePointAt(0) ?? 0;
-    return codePoint <= 0x1f || codePoint === 0x7f;
+    return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f);
   });
 }
 
