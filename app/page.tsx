@@ -1,6 +1,6 @@
 import { studioConfig } from "@/src/system/config";
 import { HealthCard } from "@/src/components/health-card";
-import { PermissionWorkbench } from "@/src/components/permission-workbench";
+import { StudioShell } from "@/src/components/studio/studio-shell";
 
 export default function HomePage() {
   return (
@@ -12,7 +12,7 @@ export default function HomePage() {
       </header>
 
       <HealthCard />
-      <PermissionWorkbench />
+      <StudioShell />
       <footer className="target-note">
         <span>{studioConfig.targetSlug}</span>
         <span>→</span>

@@ -17,6 +17,7 @@ export interface ContractModuleEditorProps {
   model: PermissionStudioModel;
   draft: PermissionDraft;
   selectedContractType?: string;
+  onSelectedContractTypeChange?: (contractType: string) => void;
   onDraftChange: (draft: PermissionDraft) => void;
 }
 
@@ -62,6 +63,7 @@ export function ContractModuleEditor({
   model,
   draft,
   selectedContractType: initialContractType,
+  onSelectedContractTypeChange,
   onDraftChange,
 }: ContractModuleEditorProps) {
   const editableContracts = useMemo(
@@ -205,7 +207,10 @@ export function ContractModuleEditor({
               <button
                 type="button"
                 aria-pressed={contractType === selectedContractType}
-                onClick={() => setSelectedContractType(contractType)}
+                onClick={() => {
+                  setSelectedContractType(contractType);
+                  onSelectedContractTypeChange?.(contractType);
+                }}
               >
                 {contractType}
               </button>

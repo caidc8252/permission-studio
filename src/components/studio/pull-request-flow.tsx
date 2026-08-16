@@ -31,6 +31,7 @@ export interface PullRequestFlowProps {
   stale?: boolean;
   pending?: boolean;
   onJobChange?: (job: ClientChangeJob | null) => void;
+  onPendingChange?: (pending: boolean) => void;
 }
 
 const INTENT_REQUEST_ID = "00000000000000000000000000";
@@ -122,6 +123,7 @@ export function PullRequestFlow({
   stale = false,
   pending: externalPending = false,
   onJobChange,
+  onPendingChange,
 }: PullRequestFlowProps) {
   const [localTitle, setLocalTitle] = useState("");
   const [localReason, setLocalReason] = useState("");
@@ -166,6 +168,10 @@ export function PullRequestFlow({
   useEffect(() => {
     onJobChange?.(job);
   }, [job, onJobChange]);
+
+  useEffect(() => {
+    onPendingChange?.(busy);
+  }, [busy, onPendingChange]);
 
   const changeTitle = (value: string) => {
     if (suppliedTitle === undefined) setLocalTitle(value);

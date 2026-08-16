@@ -1,0 +1,143 @@
+.studio,
+.modelState {
+  margin-top: 24px;
+  padding: 28px;
+  border: 1px solid var(--surface-border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 25%);
+}
+
+.header,
+.statusRow,
+.tray,
+.trayActions,
+.conflictHeader,
+.auxiliaryHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sourceSha {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.sourceSha code,
+.conflicts code {
+  font-family: var(--font-mono), "SFMono-Regular", Consolas, monospace;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.tabs button[aria-selected="true"] {
+  color: #052116;
+  border-color: var(--accent);
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.panel {
+  min-width: 0;
+}
+
+.editorLock {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.editorLock:disabled {
+  opacity: 0.72;
+}
+
+.jobNotice,
+.conflicts {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #835c32;
+  border-radius: 10px;
+  color: #ffe0b5;
+  background: #24180d;
+}
+
+.conflicts ul {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.auxiliary {
+  display: grid;
+  gap: 18px;
+}
+
+.tray {
+  position: sticky;
+  z-index: 10;
+  bottom: 16px;
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--surface-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 38%);
+}
+
+.traySummary {
+  display: grid;
+  gap: 4px;
+}
+
+.traySummary span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.trayActions {
+  justify-content: flex-end;
+}
+
+.primaryAction {
+  color: #052116;
+  border-color: var(--accent);
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.dangerAction {
+  border-color: #835c32;
+  background: #352015;
+}
+
+@media (max-width: 720px) {
+  .studio,
+  .modelState {
+    padding: 18px;
+  }
+
+  .tray {
+    bottom: 8px;
+  }
+
+  .trayActions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .trayActions button {
+    flex: 1 1 10rem;
+  }
+}

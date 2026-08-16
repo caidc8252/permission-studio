@@ -20,6 +20,7 @@ export interface RolePermissionEditorProps {
   model: PermissionStudioModel;
   draft: PermissionDraft;
   selectedRoleCode?: string;
+  onSelectedRoleCodeChange?: (roleCode: string) => void;
   onDraftChange: (draft: PermissionDraft) => void;
 }
 
@@ -51,6 +52,7 @@ export function RolePermissionEditor({
   model,
   draft,
   selectedRoleCode: initialRoleCode,
+  onSelectedRoleCodeChange,
   onDraftChange,
 }: RolePermissionEditorProps) {
   const editableRoles = useMemo(
@@ -150,7 +152,10 @@ export function RolePermissionEditor({
                 <button
                   type="button"
                   aria-pressed={role.code === selectedRoleCode}
-                  onClick={() => setSelectedRoleCode(role.code)}
+                  onClick={() => {
+                    setSelectedRoleCode(role.code);
+                    onSelectedRoleCodeChange?.(role.code);
+                  }}
                 >
                   <span>{label}</span>
                   {count ? <small>{count}</small> : null}
