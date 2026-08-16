@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ChangeDraft, type PrepareIntent } from "@/src/components/change-draft";
 import type {
   ContractEntitlement,
   PermissionMembershipType,
@@ -13,6 +14,7 @@ import { buildWorkbenchView } from "@/src/domain/workbench";
 interface PermissionWorkbenchProps {
   initialModel?: PermissionStudioModel | null;
   loadModel?: () => Promise<PermissionStudioModel>;
+  onPrepare?: (intent: PrepareIntent) => void | Promise<void>;
 }
 
 const statusLabels = {
@@ -42,6 +44,7 @@ function defaultSelections(model: PermissionStudioModel) {
 export function PermissionWorkbench({
   initialModel = null,
   loadModel = loadRemoteModel,
+  onPrepare = () => undefined,
 }: PermissionWorkbenchProps) {
   const initialSelections = initialModel ? defaultSelections(initialModel) : null;
   const [model, setModel] = useState<PermissionStudioModel | null>(initialModel);
@@ -296,6 +299,7 @@ export function PermissionWorkbench({
           )}
         </aside>
       </div>
+      <ChangeDraft key={model.sourceSha} model={model} onPrepare={onPrepare} />
     </section>
   );
 }
