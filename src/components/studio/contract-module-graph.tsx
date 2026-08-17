@@ -98,14 +98,6 @@ export function ContractModuleGraph({
     useState<ReactFlowInstance<ContractModuleFlowNode> | null>(null);
 
   useEffect(() => {
-    if (!flowInstance || query) return;
-    const frame = requestAnimationFrame(() => {
-      void flowInstance.fitView({ padding: 0.2, duration: 320 });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [collapsed, flowInstance, query]);
-
-  useEffect(() => {
     const nextStructure = structureKey(automaticLayout.nodes);
     setNodes((current) => {
       if (previousStructure.current !== nextStructure) return automaticLayout.nodes;

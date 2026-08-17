@@ -190,9 +190,11 @@ describe("ContractModuleGraph", () => {
       />,
     );
 
+    flow.fitView.mockClear();
     await user.click(screen.getByRole("button", { name: "收起菜单" }));
     expect(screen.queryByRole("checkbox", { name: "启用订单" })).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "启用快捷入口" })).toBeVisible();
+    expect(flow.fitView).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "展开菜单" }));
     expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeVisible();
