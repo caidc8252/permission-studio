@@ -3,6 +3,5 @@ node_modules/
 .next/
 coverage/
 *.tsbuildinfo
-.env
 .env.local
 .dev-server.*.log
