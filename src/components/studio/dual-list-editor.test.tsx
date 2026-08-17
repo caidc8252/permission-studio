@@ -85,6 +85,32 @@ const props: Omit<DualListEditorProps, "onTransfer"> = {
 afterEach(cleanup);
 
 describe("DualListEditor", () => {
+  it("toggles selection by clicking anywhere on a permission card", async () => {
+    const user = userEvent.setup();
+    render(<DualListEditor {...props} onTransfer={vi.fn()} />);
+
+    const card = screen.getByText("邀请用户").closest("li");
+    expect(card).not.toBeNull();
+    await user.click(card!);
+    expect(screen.getByRole("checkbox", { name: "邀请用户" })).toBeChecked();
+    expect(card).toHaveAttribute("data-selected", "true");
+
+    await user.click(screen.getByText("邀请新的工作区成员"));
+    expect(screen.getByRole("checkbox", { name: "邀请用户" })).not.toBeChecked();
+  });
+
+  it("does not toggle a card when its checkbox or drag handle handles the click", async () => {
+    const user = userEvent.setup();
+    render(<DualListEditor {...props} onTransfer={vi.fn()} />);
+
+    const checkbox = screen.getByRole("checkbox", { name: "邀请用户" });
+    await user.click(checkbox);
+    expect(checkbox).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "拖动邀请用户" }));
+    expect(checkbox).toBeChecked();
+  });
+
   it("moves selected rows with the explicit assign button", async () => {
     const user = userEvent.setup();
     const onTransfer = vi.fn();

@@ -74,6 +74,22 @@
   padding: 9px;
   border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 8px;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.row:hover {
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 45%, var(--surface-border, #d7e0ec));
+  background: var(--surface, #ffffff);
+}
+
+.row[data-selected] {
+  border-color: var(--accent, #2563eb);
+  background: var(--accent-soft, #eaf2ff);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #2563eb) 18%, transparent);
 }
 
 .row[data-dragging] {

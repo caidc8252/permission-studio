@@ -174,7 +174,22 @@ function TransferRow({
   }, [item.id, onDragEnd, onDragStart, side]);
 
   return (
-    <li ref={rowRef} className={styles.row} data-dragging={dragging || undefined}>
+    <li
+      ref={rowRef}
+      className={styles.row}
+      data-dragging={dragging || undefined}
+      data-selected={checked || indeterminate || undefined}
+      onClick={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest("button, input, select, textarea, a[href], [role='button']")
+        ) {
+          return;
+        }
+        onCheckedChange(!checked);
+      }}
+    >
       <input
         ref={(element) => {
           checkboxRef.current = element;
