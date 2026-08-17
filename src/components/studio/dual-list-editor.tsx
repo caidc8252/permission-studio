@@ -60,14 +60,54 @@ export interface TransferSelectionChange extends TransferSelectionState {
   checked: boolean;
 }
 
-function defaultRenderItem(item: TransferItem) {
+function DefaultTransferItem({ item }: { item: TransferItem }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+
+  const copyPermissionCode = async () => {
+    try {
+      await navigator.clipboard.writeText(item.id);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <span
       className={styles.itemCopy}
       style={{ paddingInlineStart: `${(item.depth ?? 0) * 1.25}rem` }}
     >
       <strong>{item.label}</strong>
-      <code>{item.id}</code>
+      <span className={styles.codeRow}>
+        <code>{item.id}</code>
+        {item.kind === "permission" ? (
+          <button
+            type="button"
+            className={styles.copyCode}
+            data-copied={copied || undefined}
+            aria-label={`${copied ? "已复制" : "复制"}权限代码：${item.id}`}
+            title={copied ? "已复制" : "复制权限代码"}
+            onClick={() => void copyPermissionCode()}
+          >
+            {copied ? (
+              <svg aria-hidden="true" viewBox="0 0 16 16">
+                <path d="m3.5 8 3 3 6-7" />
+              </svg>
+            ) : (
+              <svg aria-hidden="true" viewBox="0 0 16 16">
+                <rect x="5.25" y="5.25" width="7.5" height="7.5" rx="1.25" />
+                <path d="M10.75 5.25V4.5A1.25 1.25 0 0 0 9.5 3.25h-6A1.25 1.25 0 0 0 2.25 4.5v6A1.25 1.25 0 0 0 3.5 11.75h.75" />
+              </svg>
+            )}
+          </button>
+        ) : null}
+      </span>
       {item.description ? (
         <span
           className={styles.descriptionTooltip}
@@ -79,6 +119,10 @@ function defaultRenderItem(item: TransferItem) {
       ) : null}
     </span>
   );
+}
+
+function defaultRenderItem(item: TransferItem) {
+  return <DefaultTransferItem item={item} />;
 }
 
 function uniqueSorted(ids: readonly string[]) {

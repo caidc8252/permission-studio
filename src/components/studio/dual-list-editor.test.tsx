@@ -97,6 +97,23 @@ describe("DualListEditor", () => {
     expect(screen.queryByText("⠿")).not.toBeInTheDocument();
   });
 
+  it("copies the permission code without selecting the row", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<DualListEditor {...props} onTransfer={vi.fn()} />);
+
+    const copyButton = screen.getByRole("button", { name: "复制权限代码：user.invite" });
+    await user.click(copyButton);
+
+    expect(writeText).toHaveBeenCalledWith("user.invite");
+    expect(copyButton).toHaveAccessibleName("已复制权限代码：user.invite");
+    expect(screen.getByRole("checkbox", { name: "邀请用户" })).not.toBeChecked();
+  });
+
   it("shows group assignment counts and supports collapsing and expanding groups", async () => {
     const user = userEvent.setup();
     render(<DualListEditor {...props} onTransfer={vi.fn()} />);

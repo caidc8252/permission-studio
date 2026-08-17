@@ -229,6 +229,51 @@
   font-size: 0.78rem;
 }
 
+.itemCopy .codeRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.copyCode {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  color: var(--muted, #64748b);
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+}
+
+.copyCode:hover {
+  color: var(--accent-strong, #1d4ed8);
+  background: var(--accent-soft, #eaf2ff);
+}
+
+.copyCode:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 1px;
+}
+
+.copyCode[data-copied] {
+  color: #067647;
+  background: #ecfdf3;
+}
+
+.copyCode svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
 .descriptionTooltip {
   position: relative;
   min-width: 0;
