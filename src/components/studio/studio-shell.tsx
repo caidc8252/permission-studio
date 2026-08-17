@@ -13,7 +13,12 @@ import {
   ACTIVE_CHANGE_JOB_KEY,
   type ClientChangeJob,
 } from "@/src/components/studio/use-change-job";
-import { buildImpactDiff, createEmptyDraft, type PermissionDraft } from "@/src/domain/draft";
+import {
+  buildImpactDiff,
+  createEmptyDraft,
+  originalRoleCode,
+  type PermissionDraft,
+} from "@/src/domain/draft";
 import {
   draftStorageKey,
   rebasePermissionDraft,
@@ -22,6 +27,12 @@ import {
   type DraftConflict,
 } from "@/src/domain/draft-session";
 import { permissionStudioModelSchema, type PermissionStudioModel } from "@/src/domain/model";
+import {
+  defaultPermissionStudioLocale,
+  permissionStudioLocales,
+  translatedModelText,
+  type PermissionStudioLocale,
+} from "@/src/domain/model-i18n";
 
 type StudioTask = "roles" | "contracts" | "simulation";
 type StudioView = "tasks" | "review" | "pr";
@@ -56,12 +67,13 @@ function translatedRole(
   model: PermissionStudioModel,
   draft: PermissionDraft,
   roleCode: string,
+  locale: PermissionStudioLocale,
 ): string {
-  const role = model.roles.find((candidate) => candidate.code === roleCode);
-  if (role) return model.translations["zh-CN"][role.roleName] ?? roleCode;
-  return (
-    draft.newRoles.find((candidate) => candidate.code === roleCode)?.names["zh-CN"] ?? roleCode
+  const role = model.roles.find(
+    (candidate) => candidate.code === originalRoleCode(draft, roleCode),
   );
+  if (role) return translatedModelText(model, locale, role.roleName, roleCode);
+  return draft.newRoles.find((candidate) => candidate.code === roleCode)?.names[locale] ?? roleCode;
 }
 
 function conflictKindLabel(conflict: DraftConflict): string {
@@ -83,6 +95,7 @@ export function StudioShell({
   const [readyDraftSha, setReadyDraftSha] = useState<string | null>(null);
   const [task, setTask] = useState<StudioTask>("roles");
   const [view, setView] = useState<StudioView>("tasks");
+  const [locale, setLocale] = useState<PermissionStudioLocale>(defaultPermissionStudioLocale);
   const [conflicts, setConflicts] = useState<DraftConflict[]>([]);
   const [loading, setLoading] = useState(!initialModel);
   const [loadError, setLoadError] = useState(false);
@@ -129,8 +142,9 @@ export function StudioShell({
       setReadyDraftSha(model.sourceSha);
       return;
     }
+    const storageKey = draftStorageKey(model.sourceSha);
     const restored = restoreDraftSession(
-      window.sessionStorage.getItem(draftStorageKey(model.sourceSha)),
+      window.localStorage.getItem(storageKey) ?? window.sessionStorage.getItem(storageKey),
       model.sourceSha,
     );
     setDraft(restored?.draft ?? createEmptyDraft());
@@ -139,10 +153,12 @@ export function StudioShell({
 
   useEffect(() => {
     if (!model || readyDraftSha !== model.sourceSha) return;
-    window.sessionStorage.setItem(
-      draftStorageKey(model.sourceSha),
+    const storageKey = draftStorageKey(model.sourceSha);
+    window.localStorage.setItem(
+      storageKey,
       serializeDraftSession({ version: 1, sourceSha: model.sourceSha, draft }),
     );
+    window.sessionStorage.removeItem(storageKey);
   }, [draft, model, readyDraftSha]);
 
   useEffect(() => {
@@ -158,18 +174,29 @@ export function StudioShell({
 
   useEffect(() => {
     if (!model) return;
-    if (
-      !model.roles.some(
-        (role) => role.code === selectedRoleCode && role.code.startsWith("preset_"),
-      ) &&
-      !draft.newRoles.some((role) => role.code === selectedRoleCode)
-    ) {
+    const projectedRoleCodes = new Set([
+      ...model.roles
+        .filter(
+          (role) =>
+            role.code.startsWith("preset_") && !(draft.deletedRoleCodes ?? []).includes(role.code),
+        )
+        .map((role) => draft.roleRenames?.[role.code] ?? role.code),
+      ...draft.newRoles.map((role) => role.code),
+    ]);
+    if (!projectedRoleCodes.has(selectedRoleCode)) {
       setSelectedRoleCode(firstRole(model));
     }
     if (!model.contractTypes.includes(selectedContractType) || selectedContractType === "TEST") {
       setSelectedContractType(firstContract(model));
     }
-  }, [draft.newRoles, model, selectedContractType, selectedRoleCode]);
+  }, [
+    draft.deletedRoleCodes,
+    draft.newRoles,
+    draft.roleRenames,
+    model,
+    selectedContractType,
+    selectedRoleCode,
+  ]);
 
   const refresh = async () => {
     setLoading(true);
@@ -213,7 +240,7 @@ export function StudioShell({
     task === "roles" && selectedRoleCode
       ? {
           scenario: `role:${selectedRoleCode}`,
-          label: translatedRole(model!, draft, selectedRoleCode),
+          label: translatedRole(model!, draft, selectedRoleCode, locale),
         }
       : task === "contracts" && selectedContractType
         ? { scenario: `contract:${selectedContractType}`, label: `合同 ${selectedContractType}` }
@@ -297,14 +324,30 @@ export function StudioShell({
             </button>
           ))}
         </nav>
-        <button
-          className={styles.refreshAction}
-          type="button"
-          disabled={loading || jobActive}
-          onClick={() => void refresh()}
-        >
-          {loading ? "刷新中…" : "刷新 develop"}
-        </button>
+        <div className={styles.tabActions}>
+          <label className={styles.dataLocale}>
+            <span>数据语言</span>
+            <select
+              aria-label="数据语言"
+              value={locale}
+              onChange={(event) => setLocale(event.target.value as PermissionStudioLocale)}
+            >
+              {permissionStudioLocales.map((value) => (
+                <option key={value} value={value}>
+                  {{ "zh-CN": "中文", en: "English", ja: "日本語" }[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className={styles.refreshAction}
+            type="button"
+            disabled={loading || jobActive}
+            onClick={() => void refresh()}
+          >
+            {loading ? "刷新中…" : "刷新 develop"}
+          </button>
+        </div>
       </div>
 
       {tasks.map((item) => (
@@ -321,6 +364,7 @@ export function StudioShell({
               <RolePermissionEditor
                 model={model}
                 draft={draft}
+                locale={locale}
                 selectedRoleCode={selectedRoleCode}
                 onSelectedRoleCodeChange={setSelectedRoleCode}
                 onDraftChange={setDraft}
@@ -332,6 +376,7 @@ export function StudioShell({
               <ContractModuleEditor
                 model={model}
                 draft={draft}
+                locale={locale}
                 selectedContractType={selectedContractType}
                 onSelectedContractTypeChange={setSelectedContractType}
                 disabled={draftLocked}
@@ -339,7 +384,9 @@ export function StudioShell({
               />
             </div>
           ) : null}
-          {item.id === "simulation" ? <PermissionSimulator model={model} draft={draft} /> : null}
+          {item.id === "simulation" ? (
+            <PermissionSimulator model={model} draft={draft} locale={locale} />
+          ) : null}
         </section>
       ))}
 
@@ -364,6 +411,7 @@ export function StudioShell({
           <ChangeReview
             model={model}
             draft={draft}
+            locale={locale}
             onDraftChange={setDraft}
             disabled={draftLocked}
           />
@@ -416,6 +464,8 @@ export function StudioShell({
 
 const buildImpactDiffPlaceholder = {
   addedRoles: [],
+  deletedRoleCodes: [],
+  renamedRoles: [],
   addedRolePermissions: [],
   removedRolePermissions: [],
   addedContractOwners: [],

@@ -27,7 +27,9 @@
 }
 
 .tabBar,
-.tabs {
+.tabs,
+.tabActions,
+.dataLocale {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -45,8 +47,27 @@
   min-width: 0;
 }
 
-.refreshAction {
+.tabActions {
   margin-left: auto;
+}
+
+.dataLocale {
+  flex-wrap: nowrap;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.dataLocale select {
+  min-height: 36px;
+  padding: 7px 28px 7px 9px;
+  color: var(--text);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.refreshAction {
   white-space: nowrap;
 }
 

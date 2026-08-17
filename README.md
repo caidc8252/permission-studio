@@ -12,10 +12,16 @@ gh auth login
 gh auth setup-git
 gh auth status
 corepack pnpm install
+Copy-Item .env.example .env.local
+# 在 .env.local 中填写 GOOGLE_TRANSLATE_API_KEY
 corepack pnpm dev
 ```
 
 打开 `http://127.0.0.1:3100`。首次读取需要浅克隆目标仓库并安装其依赖，因此会比后续刷新慢。
+
+新增角色时，可在填写中文名称后点击“翻译英/日”，由服务端调用 Google Cloud Translation Basic API 自动填充英文和日文名称。请先在 Google Cloud 项目中启用 Cloud Translation API，并在 `.env.local` 中配置 `GOOGLE_TRANSLATE_API_KEY`；该 Key 只在服务端读取，不会发送到浏览器。英文和日文翻译结果仍可手动修改。
+
+启动命令会让 Node.js 读取系统的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY`。在需要代理访问 Google API 的企业网络中无需额外修改；未设置代理变量时会直接连接。
 
 目标固定为：
 

@@ -6,27 +6,6 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const dragAndDrop = vi.hoisted(() => ({
-  combine: vi.fn(
-    (...cleanups: Array<() => void>) =>
-      () =>
-        cleanups.forEach((cleanup) => cleanup()),
-  ),
-  draggable: vi.fn(() => () => undefined),
-  dropTargetForElements: vi.fn(() => () => undefined),
-  monitorForElements: vi.fn(() => () => undefined),
-}));
-
-vi.mock("@atlaskit/pragmatic-drag-and-drop/combine", () => ({
-  combine: dragAndDrop.combine,
-}));
-
-vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => ({
-  draggable: dragAndDrop.draggable,
-  dropTargetForElements: dragAndDrop.dropTargetForElements,
-  monitorForElements: dragAndDrop.monitorForElements,
-}));
-
 vi.mock("@/src/components/studio/contract-module-graph", () => ({
   ContractModuleGraph: ({
     contractType,
@@ -94,6 +73,7 @@ function expectStableTabPanels() {
 afterEach(() => {
   cleanup();
   window.sessionStorage.clear();
+  window.localStorage.clear();
   vi.unstubAllGlobals();
 });
 
@@ -112,6 +92,22 @@ describe("StudioShell", () => {
     expect(screen.queryByText("来源 SHA：", { exact: false })).not.toBeInTheDocument();
     expect(screen.queryByText(model.sourceSha)).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/api/model", { cache: "no-store" });
+  });
+
+  it("switches pep-webapp data copy without translating the workbench UI", async () => {
+    const user = userEvent.setup();
+    render(<StudioShell initialModel={model} loadModel={vi.fn()} />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "数据语言" }), "en");
+
+    expect(screen.getByRole("heading", { name: "Operations" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "Manage orders" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "角色权限" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "刷新 develop" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "新增角色" }));
+    const dialog = screen.getByRole("dialog", { name: "新增角色" });
+    expect(within(dialog).getByRole("checkbox", { name: "Manage orders" })).toBeVisible();
   });
 
   it("keeps one shared draft while switching task areas", async () => {
@@ -133,7 +129,7 @@ describe("StudioShell", () => {
       "orders.manage",
       "orders.view",
     ]);
-    window.sessionStorage.setItem(
+    window.localStorage.setItem(
       draftStorageKey(model.sourceSha),
       serializeDraftSession({ version: 1, sourceSha: model.sourceSha, draft: storedDraft }),
     );
@@ -143,9 +139,27 @@ describe("StudioShell", () => {
     expect(await screen.findByText("草稿中有 1 项变更")).toBeVisible();
     await waitFor(() =>
       expect(
-        JSON.parse(window.sessionStorage.getItem(draftStorageKey(model.sourceSha)) ?? "{}"),
+        JSON.parse(window.localStorage.getItem(draftStorageKey(model.sourceSha)) ?? "{}"),
       ).toMatchObject({ draft: storedDraft }),
     );
+  });
+
+  it("migrates a legacy session draft into local storage", async () => {
+    const storedDraft = setRolePermissionMembership(createEmptyDraft(), model, "preset_ops", [
+      "orders.manage",
+      "orders.view",
+    ]);
+    const storageKey = draftStorageKey(model.sourceSha);
+    window.sessionStorage.setItem(
+      storageKey,
+      serializeDraftSession({ version: 1, sourceSha: model.sourceSha, draft: storedDraft }),
+    );
+
+    render(<StudioShell initialModel={model} loadModel={vi.fn()} />);
+
+    expect(await screen.findByText("草稿中有 1 项变更")).toBeVisible();
+    await waitFor(() => expect(window.localStorage.getItem(storageKey)).toContain(model.sourceSha));
+    expect(window.sessionStorage.getItem(storageKey)).toBeNull();
   });
 
   it("rebases compatible changes and shows every conflict after develop refresh", async () => {
@@ -173,7 +187,7 @@ describe("StudioShell", () => {
     expect(screen.getByText("草稿中有 1 项变更")).toBeVisible();
     expect(loadModel).toHaveBeenCalledOnce();
     await waitFor(() =>
-      expect(window.sessionStorage.getItem(draftStorageKey(nextModel.sourceSha))).toContain(
+      expect(window.localStorage.getItem(draftStorageKey(nextModel.sourceSha))).toContain(
         '"contractMenus":{"ISO":[]}',
       ),
     );
@@ -240,7 +254,7 @@ describe("StudioShell", () => {
     await user.click(screen.getByRole("tab", { name: "角色权限" }));
     expect(screen.getByRole("searchbox", { name: "搜索角色" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "合同模块" }));
-    expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
+    expect(screen.getByRole("searchbox", { name: "搜索菜单、代码或路径" })).toBeEnabled();
     expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "权限模拟" }));
     expect(screen.getByRole("radio", { name: "普通成员" })).toBeEnabled();
@@ -308,7 +322,7 @@ describe("StudioShell", () => {
     expect(screen.getByRole("button", { name: "添加已选权限" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "合同模块" }));
     expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeDisabled();
-    expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
+    expect(screen.getByRole("searchbox", { name: "搜索菜单、代码或路径" })).toBeEnabled();
     await user.click(screen.getByRole("tab", { name: "权限模拟" }));
     expect(screen.getByRole("radio", { name: "普通成员" })).toBeEnabled();
     expect(screen.getByText(requestId)).toBeVisible();
