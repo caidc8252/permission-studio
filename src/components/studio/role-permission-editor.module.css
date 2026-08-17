@@ -1,13 +1,13 @@
 .editor {
   display: grid;
   height: clamp(36rem, calc(100vh - 10rem), 56rem);
-  grid-template-columns: minmax(12rem, 0.38fr) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: clamp(17.5rem, 21vw, 19.5rem) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .sidebar {
   min-width: 0;
-  padding: 16px;
+  padding: 14px;
   border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 12px;
   background: var(--surface-subtle, #f7f9fc);
@@ -69,37 +69,148 @@
   scrollbar-gutter: stable;
 }
 
-.roleList button {
-  display: flex;
+.roleCard {
+  position: relative;
+}
+
+.roleCard:has(.roleCardMore[aria-expanded="true"]) {
+  z-index: 3;
+}
+
+.roleSelect {
+  display: grid;
   width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 7px;
   text-align: left;
+  padding: 10px 12px;
+}
+
+.roleCard:has(.roleCardActions) .roleSelect {
+  padding-right: 12px;
 }
 
 .roleIdentity {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
+  padding-right: 2rem;
 }
 
 .roleIdentity > span {
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .roleIdentity code {
+  overflow: hidden;
   color: var(--muted, #64748b);
   font-size: 0.72rem;
   line-height: 1.2;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.roleList button[aria-pressed="true"] {
+.roleFooter {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.roleDescription {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted, #64748b);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roleSelect[aria-pressed="true"] {
   border-color: var(--accent, #2563eb);
 }
 
-.roleList small {
+.newRoleCard .roleSelect {
+  background: #fff3c4;
+}
+
+.newRoleCard .roleSelect:hover {
+  background: #ffeb9f;
+}
+
+.roleCardActions {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 2;
+}
+
+.roleCardMore {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  place-items: center;
+  color: var(--muted, #64748b);
+  border: 0;
+  background: transparent;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.roleCardMore:hover,
+.roleCardMore[aria-expanded="true"] {
+  color: var(--foreground, #172033);
+  background: var(--surface-subtle, #f7f9fc);
+}
+
+.roleCardMenu {
+  position: absolute;
+  top: calc(100% + 3px);
+  right: 0;
+  display: grid;
+  width: max-content;
+  min-width: 8.5rem;
+  padding: 4px;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 14%);
+}
+
+.roleCardMenu button {
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.roleCardMenu button:hover {
+  background: var(--surface-subtle, #f7f9fc);
+}
+
+.roleCardMenu .roleCardDelete {
+  color: var(--danger, #b42318);
+}
+
+.roleCounts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted, #64748b);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.roleCounts small {
   min-width: 1.4rem;
   padding: 1px 5px;
   color: var(--accent-contrast, #ffffff);
@@ -113,7 +224,7 @@
   min-width: 0;
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
+  gap: 14px;
   padding: 4px 0 0;
 }
 
@@ -122,6 +233,7 @@
   justify-content: space-between;
   gap: 16px;
   align-items: start;
+  padding: 2px 2px 0;
 }
 
 .heading h2,
@@ -131,6 +243,27 @@
 
 .heading p {
   color: var(--muted, #64748b);
+}
+
+.headingCopy {
+  display: grid;
+  gap: 6px;
+}
+
+.roleTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.roleTitle code {
+  padding: 3px 7px;
+  color: var(--muted, #64748b);
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 6px;
+  background: var(--surface-subtle, #f7f9fc);
+  font-size: 0.76rem;
 }
 
 .empty {

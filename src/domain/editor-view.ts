@@ -1,6 +1,11 @@
 import type { TransferItem } from "@/src/components/studio/dual-list-editor";
 import type { PermissionDraft } from "@/src/domain/draft";
 import type { PermissionStudioModel } from "@/src/domain/model";
+import {
+  defaultPermissionStudioLocale,
+  translatedModelText,
+  type PermissionStudioLocale,
+} from "@/src/domain/model-i18n";
 
 export interface RoleEditorView {
   roleCode: string;
@@ -25,10 +30,6 @@ interface SortableTransferItem {
   menuOrder: number;
 }
 
-function translated(model: PermissionStudioModel, key: string, fallback: string): string {
-  return model.translations["zh-CN"][key] ?? fallback;
-}
-
 function editableRole(model: PermissionStudioModel, roleCode: string) {
   const role = model.roles.find((candidate) => candidate.code === roleCode);
   if (!role || !role.code.startsWith("preset_")) {
@@ -47,6 +48,7 @@ function editableContract(model: PermissionStudioModel, contractType: string): v
 export function buildPermissionTransferItems(
   model: PermissionStudioModel,
   permissionCodes: readonly string[],
+  locale: PermissionStudioLocale = defaultPermissionStudioLocale,
 ): TransferItem[] {
   const items: SortableTransferItem[] = [];
   for (const code of permissionCodes) {
@@ -56,12 +58,13 @@ export function buildPermissionTransferItems(
     const widget = code.startsWith("widget.") || permission.belongToMenuCode.startsWith("widget.");
     items.push({
       id: code,
-      label: translated(model, permission.label, code),
-      description: translated(model, permission.desc, code),
+      label: translatedModelText(model, locale, permission.label, code),
+      description: translatedModelText(model, locale, permission.desc, code),
       group: widget
         ? "Widget"
-        : translated(
+        : translatedModelText(
             model,
+            locale,
             menu?.title ?? permission.belongToMenuCode,
             permission.belongToMenuCode,
           ),
@@ -78,22 +81,25 @@ export function buildRoleEditorView(
   model: PermissionStudioModel,
   draft: PermissionDraft,
   roleCode: string,
+  locale: PermissionStudioLocale = defaultPermissionStudioLocale,
 ): RoleEditorView {
   const role = editableRole(model, roleCode);
   const assignedCodes = new Set(draft.rolePermissions[roleCode] ?? role.permissionCodes);
   const assigned = buildPermissionTransferItems(
     model,
     model.permissionCodes.filter((code) => assignedCodes.has(code)),
+    locale,
   );
   const available = buildPermissionTransferItems(
     model,
     model.permissionCodes.filter((code) => !assignedCodes.has(code)),
+    locale,
   );
 
   return {
     roleCode: role.code,
-    roleLabel: translated(model, role.roleName, role.code),
-    roleDescription: translated(model, role.remark, role.code),
+    roleLabel: translatedModelText(model, locale, role.roleName, role.code),
+    roleDescription: translatedModelText(model, locale, role.remark, role.code),
     assigned,
     available,
   };
@@ -139,12 +145,15 @@ function menuDepth(model: PermissionStudioModel, code: string): number {
   return depth;
 }
 
-function contractItems(model: PermissionStudioModel): TransferItem[] {
+function contractItems(
+  model: PermissionStudioModel,
+  locale: PermissionStudioLocale,
+): TransferItem[] {
   const menus = orderedMenuCodes(model).map((code) => {
     const menu = model.menuRegistry[code]!;
     return {
       id: code,
-      label: translated(model, menu.title, code),
+      label: translatedModelText(model, locale, menu.title, code),
       description: menu.path ?? undefined,
       group: "Menus",
       kind: "menu" as const,
@@ -165,8 +174,10 @@ function contractItems(model: PermissionStudioModel): TransferItem[] {
         .sort((left, right) => left.code.localeCompare(right.code))[0];
       return {
         id: owner,
-        label: permission ? translated(model, permission.label, owner) : owner,
-        description: permission ? translated(model, permission.desc, owner) : undefined,
+        label: permission ? translatedModelText(model, locale, permission.label, owner) : owner,
+        description: permission
+          ? translatedModelText(model, locale, permission.desc, owner)
+          : undefined,
         group: "Widgets",
         kind: "widget" as const,
         depth: 0,
@@ -179,6 +190,7 @@ export function buildContractEditorView(
   model: PermissionStudioModel,
   draft: PermissionDraft,
   contractType: string,
+  locale: PermissionStudioLocale = defaultPermissionStudioLocale,
 ): ContractEditorView {
   editableContract(model, contractType);
   const menuOwners = new Set(
@@ -189,7 +201,7 @@ export function buildContractEditorView(
   );
   const assigned: TransferItem[] = [];
   const available: TransferItem[] = [];
-  for (const item of contractItems(model)) {
+  for (const item of contractItems(model, locale)) {
     const owners = item.kind === "menu" ? menuOwners : widgetOwners;
     if (owners.has(item.id)) assigned.push(item);
     else available.push(item);

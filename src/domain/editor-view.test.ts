@@ -29,6 +29,20 @@ describe("role editor view", () => {
     });
   });
 
+  it("projects role, permission, and module copy in the selected data locale", () => {
+    const view = buildRoleEditorView(model, createEmptyDraft(), "preset_ops", "en");
+
+    expect(view).toMatchObject({
+      roleLabel: "Operations",
+      roleDescription: "Operations role.",
+    });
+    expect(view.assigned[0]).toMatchObject({
+      label: "View orders",
+      description: "View order records.",
+      group: "Orders",
+    });
+  });
+
   it("uses the draft membership and keeps groups in menu order", () => {
     const expanded = {
       ...model,

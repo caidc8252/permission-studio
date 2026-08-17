@@ -1,11 +1,5 @@
 "use client";
 
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
-import {
-  draggable,
-  dropTargetForElements,
-  monitorForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import styles from "@/src/components/studio/dual-list-editor.module.css";
@@ -35,11 +29,8 @@ export interface TransferLabels {
   unassignSelected: string;
   empty: string;
   actions: string;
-  dragHandle: (item: TransferItem) => string;
-  dragPreview: (count: number) => string;
   noSelection: string;
   moved: (direction: TransferRequest["direction"], count: number) => string;
-  sameSideDrop: string;
 }
 
 export interface DualListEditorProps {
@@ -51,6 +42,10 @@ export interface DualListEditorProps {
   renderItem?: (item: TransferItem) => React.ReactNode;
   reduceSelection?: (change: TransferSelectionChange) => ReadonlySet<string>;
   isItemIndeterminate?: (state: TransferSelectionState) => boolean;
+  directActions?: {
+    assign: string;
+    unassign: string;
+  };
 }
 
 type Side = "available" | "assigned";
@@ -65,33 +60,6 @@ export interface TransferSelectionChange extends TransferSelectionState {
   checked: boolean;
 }
 
-interface TransferDragData {
-  type: "transfer-item";
-  side: Side;
-  id: string;
-}
-
-interface TransferPanelData {
-  type: "transfer-panel";
-  side: Side;
-}
-
-function isTransferDragData(
-  data: Record<string, unknown>,
-): data is Record<string, unknown> & TransferDragData {
-  return (
-    data.type === "transfer-item" &&
-    (data.side === "available" || data.side === "assigned") &&
-    typeof data.id === "string"
-  );
-}
-
-function isTransferPanelData(
-  data: Record<string | symbol, unknown>,
-): data is Record<string | symbol, unknown> & TransferPanelData {
-  return data.type === "transfer-panel" && (data.side === "available" || data.side === "assigned");
-}
-
 function defaultRenderItem(item: TransferItem) {
   return (
     <span
@@ -100,7 +68,15 @@ function defaultRenderItem(item: TransferItem) {
     >
       <strong>{item.label}</strong>
       <code>{item.id}</code>
-      {item.description ? <span>{item.description}</span> : null}
+      {item.description ? (
+        <span
+          className={styles.descriptionTooltip}
+          data-tooltip={item.description}
+          title={item.description}
+        >
+          <span className={styles.itemDescription}>{item.description}</span>
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -109,78 +85,42 @@ function uniqueSorted(ids: readonly string[]) {
   return [...new Set(ids)].sort();
 }
 
+function countItemsByGroup(items: readonly TransferItem[]) {
+  const counts = new Map<string, number>();
+  for (const item of items) counts.set(item.group, (counts.get(item.group) ?? 0) + 1);
+  return counts;
+}
+
 interface TransferRowProps {
   item: TransferItem;
-  side: Side;
   checked: boolean;
   indeterminate: boolean;
   onCheckedChange: (checked: boolean) => void;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  getDragCount: () => number;
-  dragHandleLabel: string;
-  dragPreview: (count: number) => string;
   itemRef: (element: HTMLInputElement | null) => void;
   renderItem: (item: TransferItem) => React.ReactNode;
+  directActionLabel?: string;
+  onDirectAction?: () => void;
 }
 
 function TransferRow({
   item,
-  side,
   checked,
   indeterminate,
   onCheckedChange,
-  onDragStart,
-  onDragEnd,
-  getDragCount,
-  dragHandleLabel,
-  dragPreview,
   itemRef,
   renderItem,
+  directActionLabel,
+  onDirectAction,
 }: TransferRowProps) {
-  const rowRef = useRef<HTMLLIElement | null>(null);
-  const handleRef = useRef<HTMLButtonElement | null>(null);
   const checkboxRef = useRef<HTMLInputElement | null>(null);
-  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     if (checkboxRef.current) checkboxRef.current.indeterminate = indeterminate;
   }, [indeterminate]);
 
-  useEffect(() => {
-    const row = rowRef.current;
-    const handle = handleRef.current;
-    if (!row || !handle) return;
-    return draggable({
-      element: row,
-      dragHandle: handle,
-      getInitialData: () => ({ type: "transfer-item", side, id: item.id }),
-      onDragStart: () => {
-        setDragging(true);
-        onDragStart();
-      },
-      onGenerateDragPreview: ({ nativeSetDragImage }) => {
-        if (!nativeSetDragImage) return;
-        const preview = document.createElement("div");
-        const count = getDragCount();
-        preview.className = styles.dragPreview;
-        preview.textContent = dragPreview(count);
-        document.body.append(preview);
-        nativeSetDragImage(preview, 0, 0);
-        queueMicrotask(() => preview.remove());
-      },
-      onDrop: () => {
-        setDragging(false);
-        onDragEnd();
-      },
-    });
-  }, [item.id, onDragEnd, onDragStart, side]);
-
   return (
     <li
-      ref={rowRef}
       className={styles.row}
-      data-dragging={dragging || undefined}
       data-selected={checked || indeterminate || undefined}
       onClick={(event) => {
         const target = event.target;
@@ -205,15 +145,16 @@ function TransferRow({
         onChange={(event) => onCheckedChange(event.target.checked)}
       />
       {renderItem(item)}
-      <button
-        ref={handleRef}
-        type="button"
-        className={styles.dragHandle}
-        aria-label={dragHandleLabel}
-        title={dragHandleLabel}
-      >
-        <span aria-hidden="true">⠿</span>
-      </button>
+      {directActionLabel && onDirectAction ? (
+        <button
+          type="button"
+          className={styles.directAction}
+          aria-label={`${directActionLabel}：${item.label}`}
+          onClick={onDirectAction}
+        >
+          {directActionLabel}
+        </button>
+      ) : null}
     </li>
   );
 }
@@ -221,93 +162,132 @@ function TransferRow({
 interface TransferPanelProps {
   side: Side;
   label: string;
+  groups: string[];
   items: TransferItem[];
+  groupCounts: ReadonlyMap<string, number>;
+  totalGroupCounts: ReadonlyMap<string, number>;
+  collapsedGroups: ReadonlySet<string>;
+  onGroupToggle: (group: string) => void;
+  expandAllGroups: boolean;
   selection: Set<string>;
   onSelectionChange: (selection: Set<string>) => void;
-  panelRef: (element: HTMLElement | null) => void;
   itemRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
   renderItem: (item: TransferItem) => React.ReactNode;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  isDropTarget: boolean;
   emptyLabel: string;
-  dragHandle: (item: TransferItem) => string;
-  dragPreview: (count: number) => string;
   reduceSelection?: DualListEditorProps["reduceSelection"];
   isItemIndeterminate?: DualListEditorProps["isItemIndeterminate"];
+  selectedActionLabel?: string;
+  directActionLabel?: string;
+  onTransfer?: (ids: readonly string[]) => void;
 }
 
 function TransferPanel({
   side,
   label,
+  groups,
   items,
+  groupCounts,
+  totalGroupCounts,
+  collapsedGroups,
+  onGroupToggle,
+  expandAllGroups,
   selection,
   onSelectionChange,
-  panelRef,
   itemRefs,
   renderItem,
-  onDragStart,
-  onDragEnd,
-  isDropTarget,
   emptyLabel,
-  dragHandle,
-  dragPreview,
   reduceSelection,
   isItemIndeterminate,
+  selectedActionLabel,
+  directActionLabel,
+  onTransfer,
 }: TransferPanelProps) {
-  const groups = useMemo(() => {
+  const groupId = useId();
+  const groupedItems = useMemo(() => {
     const grouped = new Map<string, TransferItem[]>();
     for (const item of items) grouped.set(item.group, [...(grouped.get(item.group) ?? []), item]);
-    return [...grouped.entries()];
+    return grouped;
   }, [items]);
 
   return (
-    <section
-      ref={panelRef}
-      className={styles.panel}
-      data-drop-target={isDropTarget || undefined}
-      aria-label={label}
-    >
-      <h3>{label}</h3>
+    <section className={styles.panel} aria-label={label}>
+      <header className={styles.panelHeader}>
+        <h3>
+          {label} <small>{items.length}</small>
+        </h3>
+        {selectedActionLabel && onTransfer ? (
+          <button
+            type="button"
+            className={styles.batchAction}
+            aria-label={selectedActionLabel}
+            disabled={!selection.size}
+            onClick={() => onTransfer([...selection])}
+          >
+            {selectedActionLabel}
+            {selection.size ? `（${selection.size}）` : ""}
+          </button>
+        ) : null}
+      </header>
       {groups.length ? (
-        groups.map(([group, groupItems]) => (
-          <section className={styles.group} aria-label={group} key={group}>
-            <h4>{group}</h4>
-            <ul>
-              {groupItems.map((item) => (
-                <TransferRow
-                  key={item.id}
-                  item={item}
-                  side={side}
-                  checked={selection.has(item.id)}
-                  indeterminate={isItemIndeterminate?.({ side, item, selection }) ?? false}
-                  onCheckedChange={(checked) => {
-                    if (reduceSelection) {
-                      onSelectionChange(
-                        new Set(reduceSelection({ side, item, checked, selection })),
-                      );
-                      return;
-                    }
-                    const next = new Set(selection);
-                    if (checked) next.add(item.id);
-                    else next.delete(item.id);
-                    onSelectionChange(next);
-                  }}
-                  onDragStart={onDragStart}
-                  onDragEnd={onDragEnd}
-                  getDragCount={() => (selection.has(item.id) ? selection.size : 1)}
-                  dragHandleLabel={dragHandle(item)}
-                  dragPreview={dragPreview}
-                  itemRef={(element) => {
-                    if (element) itemRefs.current.set(item.id, element);
-                    else itemRefs.current.delete(item.id);
-                  }}
-                  renderItem={renderItem}
-                />
-              ))}
-            </ul>
-          </section>
-        ))
+        groups.map((group, index) => {
+          const groupItems = groupedItems.get(group) ?? [];
+          const expanded = expandAllGroups || !collapsedGroups.has(group);
+          const headingId = `${groupId}-heading-${index}`;
+          const contentId = `${groupId}-content-${index}`;
+          return (
+            <section className={styles.group} aria-labelledby={headingId} key={group}>
+              <h4 id={headingId}>
+                <button
+                  type="button"
+                  className={styles.groupToggle}
+                  aria-controls={contentId}
+                  aria-expanded={expanded}
+                  aria-label={`${group} ${groupCounts.get(group) ?? 0} / ${totalGroupCounts.get(group) ?? 0}`}
+                  onClick={() => onGroupToggle(group)}
+                >
+                  <span className={styles.groupChevron} aria-hidden="true">
+                    {expanded ? "▾" : "▸"}
+                  </span>
+                  <span className={styles.groupName}>{group}</span>
+                  <span className={styles.groupCount}>
+                    {groupCounts.get(group) ?? 0} / {totalGroupCounts.get(group) ?? 0}
+                  </span>
+                </button>
+              </h4>
+              {expanded ? (
+                <ul id={contentId}>
+                  {groupItems.map((item) => (
+                    <TransferRow
+                      key={item.id}
+                      item={item}
+                      checked={selection.has(item.id)}
+                      indeterminate={isItemIndeterminate?.({ side, item, selection }) ?? false}
+                      onCheckedChange={(checked) => {
+                        if (reduceSelection) {
+                          onSelectionChange(
+                            new Set(reduceSelection({ side, item, checked, selection })),
+                          );
+                          return;
+                        }
+                        const next = new Set(selection);
+                        if (checked) next.add(item.id);
+                        else next.delete(item.id);
+                        onSelectionChange(next);
+                      }}
+                      itemRef={(element) => {
+                        if (element) itemRefs.current.set(item.id, element);
+                        else itemRefs.current.delete(item.id);
+                      }}
+                      renderItem={renderItem}
+                      directActionLabel={directActionLabel}
+                      onDirectAction={onTransfer ? () => onTransfer([item.id]) : undefined}
+                    />
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          );
+        })
       ) : (
         <p className={styles.empty}>{emptyLabel}</p>
       )}
@@ -324,23 +304,40 @@ export function DualListEditor({
   renderItem = defaultRenderItem,
   reduceSelection,
   isItemIndeterminate,
+  directActions,
 }: DualListEditorProps) {
+  const groups = useMemo(
+    () => [...new Set([...available, ...assigned].map((item) => item.group))],
+    [assigned, available],
+  );
+  const availableGroupCounts = useMemo(() => countItemsByGroup(available), [available]);
+  const assignedGroupCounts = useMemo(() => countItemsByGroup(assigned), [assigned]);
+  const totalGroupCounts = useMemo(
+    () => countItemsByGroup([...available, ...assigned]),
+    [assigned, available],
+  );
   const [availableSelection, setAvailableSelection] = useState<Set<string>>(new Set());
   const [assignedSelection, setAssignedSelection] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<Side, Set<string>>>(() => ({
+    available: new Set(groups.filter((group) => group !== available[0]?.group)),
+    assigned: new Set(groups.filter((group) => group !== assigned[0]?.group)),
+  }));
   const [announcement, setAnnouncement] = useState("");
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
-  const [draggedSide, setDraggedSide] = useState<Side | null>(null);
-  const [dropTargetSide, setDropTargetSide] = useState<Side | null>(null);
   const groupFilterId = useId();
   const destinationRefs = useRef(new Map<string, HTMLInputElement>());
   const sourceRefs = useRef(new Map<string, HTMLInputElement>());
-  const availablePanelRef = useRef<HTMLElement | null>(null);
-  const assignedPanelRef = useRef<HTMLElement | null>(null);
-  const selectionsRef = useRef({ available: availableSelection, assigned: assignedSelection });
   const pendingFocusRef = useRef<{ side: Side; id: string } | null>(null);
 
-  selectionsRef.current = { available: availableSelection, assigned: assignedSelection };
+  const toggleGroup = (side: Side, group: string) => {
+    setCollapsedGroups((current) => {
+      const nextSide = new Set(current[side]);
+      if (nextSide.has(group)) nextSide.delete(group);
+      else nextSide.add(group);
+      return { ...current, [side]: nextSide };
+    });
+  };
 
   const transfer = (direction: TransferRequest["direction"], ids: readonly string[]) => {
     const unique = uniqueSorted(ids);
@@ -349,6 +346,15 @@ export function DualListEditor({
       setAnnouncement(labels.noSelection);
       return;
     }
+    const sourceItems = direction === "assign" ? available : assigned;
+    const destinationGroups = new Set(
+      sourceItems.filter((item) => unique.includes(item.id)).map((item) => item.group),
+    );
+    setCollapsedGroups((current) => {
+      const nextDestination = new Set(current[destination]);
+      for (const group of destinationGroups) nextDestination.delete(group);
+      return { ...current, [destination]: nextDestination };
+    });
     pendingFocusRef.current = { side: destination, id: unique[0]! };
     onTransfer({ direction, ids: unique });
     setAnnouncement(labels.moved(direction, unique.length));
@@ -366,54 +372,7 @@ export function DualListEditor({
     queueMicrotask(() => target.focus());
   }, [assigned, available]);
 
-  useEffect(() => {
-    const panels: Array<[Side, HTMLElement | null]> = [
-      ["available", availablePanelRef.current],
-      ["assigned", assignedPanelRef.current],
-    ];
-    const cleanups = panels.flatMap(([side, panel]) => {
-      if (!panel) return [];
-      return [
-        dropTargetForElements({
-          element: panel,
-          getData: () => ({ type: "transfer-panel", side }),
-          onDragEnter: () => setDropTargetSide(side),
-          onDragLeave: () => setDropTargetSide(null),
-          onDrop: () => setDropTargetSide(null),
-        }),
-      ];
-    });
-    return combine(...cleanups);
-  }, []);
-
-  useEffect(() => {
-    return monitorForElements({
-      canMonitor: ({ source }) => isTransferDragData(source.data),
-      onDrop: ({ source, location }) => {
-        if (!isTransferDragData(source.data)) return;
-        const target = location.current.dropTargets
-          .map((dropTarget) => dropTarget.data)
-          .find(isTransferPanelData);
-        if (!target) return;
-        if (target.side === source.data.side) {
-          setAnnouncement(labels.sameSideDrop);
-          return;
-        }
-        const selected = selectionsRef.current[source.data.side];
-        const ids = selected.has(source.data.id) ? [...selected] : [source.data.id];
-        transfer(source.data.side === "available" ? "assign" : "unassign", ids);
-      },
-    });
-  });
-
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const groups = useMemo(
-    () =>
-      [...new Set([...available, ...assigned].map((item) => item.group))].sort((left, right) =>
-        left.localeCompare(right),
-      ),
-    [assigned, available],
-  );
   const matching = (items: TransferItem[]) =>
     items.filter(
       (item) =>
@@ -423,6 +382,16 @@ export function DualListEditor({
             .filter((value): value is string => Boolean(value))
             .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))),
     );
+  const matchingAvailable = matching(available);
+  const matchingAssigned = matching(assigned);
+  const matchingGroups = new Set(
+    [...matchingAvailable, ...matchingAssigned].map((item) => item.group),
+  );
+  const visibleGroups = groups.filter(
+    (group) =>
+      (!groupFilter || group === groupFilter) && (!normalizedQuery || matchingGroups.has(group)),
+  );
+  const expandFilteredGroups = Boolean(groupFilter || normalizedQuery);
 
   return (
     <section aria-label={ariaLabel} className={styles.transfer}>
@@ -468,62 +437,66 @@ export function DualListEditor({
           </div>
         </div>
       </div>
-      <div className={styles.editor}>
+      <div className={styles.editor} data-direct-actions={directActions ? "true" : undefined}>
         <TransferPanel
           side="available"
           label={labels.available}
-          items={matching(available)}
+          groups={visibleGroups}
+          items={matchingAvailable}
+          groupCounts={availableGroupCounts}
+          totalGroupCounts={totalGroupCounts}
+          collapsedGroups={collapsedGroups.available}
+          onGroupToggle={(group) => toggleGroup("available", group)}
+          expandAllGroups={expandFilteredGroups}
           selection={availableSelection}
           onSelectionChange={setAvailableSelection}
-          panelRef={(element) => {
-            availablePanelRef.current = element;
-          }}
           itemRefs={sourceRefs}
           renderItem={renderItem}
-          onDragStart={() => setDraggedSide("available")}
-          onDragEnd={() => setDraggedSide(null)}
-          isDropTarget={dropTargetSide === "available" && draggedSide !== "available"}
           emptyLabel={labels.empty}
-          dragHandle={labels.dragHandle}
-          dragPreview={labels.dragPreview}
           reduceSelection={reduceSelection}
           isItemIndeterminate={isItemIndeterminate}
+          selectedActionLabel={directActions ? labels.assignSelected : undefined}
+          directActionLabel={directActions?.assign}
+          onTransfer={directActions ? (ids) => transfer("assign", ids) : undefined}
         />
-        <div className={styles.actions} aria-label={labels.actions}>
-          <button
-            type="button"
-            disabled={!availableSelection.size}
-            onClick={() => transfer("assign", [...availableSelection])}
-          >
-            {labels.assignSelected}
-          </button>
-          <button
-            type="button"
-            disabled={!assignedSelection.size}
-            onClick={() => transfer("unassign", [...assignedSelection])}
-          >
-            {labels.unassignSelected}
-          </button>
-        </div>
+        {!directActions ? (
+          <div className={styles.actions} aria-label={labels.actions}>
+            <button
+              type="button"
+              disabled={!availableSelection.size}
+              onClick={() => transfer("assign", [...availableSelection])}
+            >
+              {labels.assignSelected}
+            </button>
+            <button
+              type="button"
+              disabled={!assignedSelection.size}
+              onClick={() => transfer("unassign", [...assignedSelection])}
+            >
+              {labels.unassignSelected}
+            </button>
+          </div>
+        ) : null}
         <TransferPanel
           side="assigned"
           label={labels.assigned}
-          items={matching(assigned)}
+          groups={visibleGroups}
+          items={matchingAssigned}
+          groupCounts={assignedGroupCounts}
+          totalGroupCounts={totalGroupCounts}
+          collapsedGroups={collapsedGroups.assigned}
+          onGroupToggle={(group) => toggleGroup("assigned", group)}
+          expandAllGroups={expandFilteredGroups}
           selection={assignedSelection}
           onSelectionChange={setAssignedSelection}
-          panelRef={(element) => {
-            assignedPanelRef.current = element;
-          }}
           itemRefs={destinationRefs}
           renderItem={renderItem}
-          onDragStart={() => setDraggedSide("assigned")}
-          onDragEnd={() => setDraggedSide(null)}
-          isDropTarget={dropTargetSide === "assigned" && draggedSide !== "assigned"}
           emptyLabel={labels.empty}
-          dragHandle={labels.dragHandle}
-          dragPreview={labels.dragPreview}
           reduceSelection={reduceSelection}
           isItemIndeterminate={isItemIndeterminate}
+          selectedActionLabel={directActions ? labels.unassignSelected : undefined}
+          directActionLabel={directActions?.unassign}
+          onTransfer={directActions ? (ids) => transfer("unassign", ids) : undefined}
         />
       </div>
       <p role="status" aria-live="polite" className={styles.srOnly}>

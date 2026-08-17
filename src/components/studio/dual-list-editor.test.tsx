@@ -2,31 +2,10 @@
 
 import "@testing-library/jest-dom/vitest";
 
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-const dragAndDrop = vi.hoisted(() => ({
-  combine: vi.fn(
-    (...cleanups: Array<() => void>) =>
-      () =>
-        cleanups.forEach((cleanup) => cleanup()),
-  ),
-  draggable: vi.fn(() => () => undefined),
-  dropTargetForElements: vi.fn(() => () => undefined),
-  monitorForElements: vi.fn(() => () => undefined),
-}));
-
-vi.mock("@atlaskit/pragmatic-drag-and-drop/combine", () => ({
-  combine: dragAndDrop.combine,
-}));
-
-vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => ({
-  draggable: dragAndDrop.draggable,
-  dropTargetForElements: dragAndDrop.dropTargetForElements,
-  monitorForElements: dragAndDrop.monitorForElements,
-}));
 
 import {
   DualListEditor,
@@ -76,18 +55,28 @@ const props: Omit<DualListEditorProps, "onTransfer"> = {
     unassignSelected: "移除已选权限",
     empty: "没有匹配的权限",
     actions: "权限转移操作",
-    dragHandle: (item: TransferItem) => `拖动${item.label}`,
-    dragPreview: (count: number) => `已选择 ${count} 项`,
     noSelection: "请先选择权限",
     moved: (direction: "assign" | "unassign", count: number) =>
       direction === "assign" ? `已添加 ${count} 项权限` : `已移除 ${count} 项权限`,
-    sameSideDrop: "该权限已在此列表中",
   },
 };
 
 afterEach(cleanup);
 
 describe("DualListEditor", () => {
+  it("keeps the full permission description available as a hover tooltip", () => {
+    render(<DualListEditor {...props} onTransfer={vi.fn()} />);
+
+    expect(screen.getByText("邀请新的工作区成员").parentElement).toHaveAttribute(
+      "title",
+      "邀请新的工作区成员",
+    );
+    expect(screen.getByText("邀请新的工作区成员").parentElement).toHaveAttribute(
+      "data-tooltip",
+      "邀请新的工作区成员",
+    );
+  });
+
   it("toggles selection by clicking anywhere on a permission card", async () => {
     const user = userEvent.setup();
     render(<DualListEditor {...props} onTransfer={vi.fn()} />);
@@ -102,16 +91,33 @@ describe("DualListEditor", () => {
     expect(screen.getByRole("checkbox", { name: "邀请用户" })).not.toBeChecked();
   });
 
-  it("does not toggle a card when its checkbox or drag handle handles the click", async () => {
-    const user = userEvent.setup();
+  it("does not render drag handles", () => {
     render(<DualListEditor {...props} onTransfer={vi.fn()} />);
 
-    const checkbox = screen.getByRole("checkbox", { name: "邀请用户" });
-    await user.click(checkbox);
-    expect(checkbox).toBeChecked();
+    expect(screen.queryByText("⠿")).not.toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole("button", { name: "拖动邀请用户" }));
-    expect(checkbox).toBeChecked();
+  it("shows group assignment counts and supports collapsing and expanding groups", async () => {
+    const user = userEvent.setup();
+    render(<DualListEditor {...props} onTransfer={vi.fn()} />);
+    const availablePanel = screen.getByRole("region", { name: "可添加权限" });
+    const assignedPanel = screen.getByRole("region", { name: "已分配权限" });
+
+    expect(within(availablePanel).getByRole("button", { name: "用户 1 / 1" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(within(assignedPanel).getByRole("button", { name: "用户 0 / 1" })).toBeVisible();
+
+    const reportGroup = within(availablePanel).getByRole("button", { name: "报表 1 / 1" });
+    expect(reportGroup).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("导出报表")).not.toBeInTheDocument();
+    await user.click(reportGroup);
+    expect(reportGroup).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("导出报表")).toBeVisible();
+
+    await user.click(within(availablePanel).getByRole("button", { name: "用户 1 / 1" }));
+    expect(screen.queryByText("邀请用户")).not.toBeInTheDocument();
   });
 
   it("moves selected rows with the explicit assign button", async () => {
@@ -121,6 +127,24 @@ describe("DualListEditor", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
     await user.click(screen.getByRole("button", { name: "添加已选权限" }));
+
+    expect(onTransfer).toHaveBeenCalledWith({ direction: "assign", ids: ["user.invite"] });
+    expect(screen.getByRole("status")).toHaveTextContent("已添加 1 项权限");
+  });
+
+  it("supports direct row actions while keeping batch actions inside each list", async () => {
+    const user = userEvent.setup();
+    const onTransfer = vi.fn();
+    render(
+      <DualListEditor
+        {...props}
+        directActions={{ assign: "添加", unassign: "移除" }}
+        onTransfer={onTransfer}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "添加已选权限" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "添加：邀请用户" }));
 
     expect(onTransfer).toHaveBeenCalledWith({ direction: "assign", ids: ["user.invite"] });
     expect(screen.getByRole("status")).toHaveTextContent("已添加 1 项权限");
@@ -154,15 +178,14 @@ describe("DualListEditor", () => {
     await user.click(screen.getByRole("button", { name: "清空权限分组" }));
     expect(groupFilter).toHaveValue("");
     expect(screen.getByText("邀请用户")).toBeVisible();
-    expect(screen.getByText("查看订单")).toBeVisible();
+    expect(screen.getByRole("button", { name: "订单 1 / 1" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "清空权限分组" })).not.toBeInTheDocument();
   });
 
-  it("uses caller-supplied Chinese text for the empty state and drag handle", async () => {
+  it("uses caller-supplied Chinese text for the empty state", async () => {
     const user = userEvent.setup();
     render(<DualListEditor {...props} onTransfer={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "拖动邀请用户" })).toBeVisible();
     await user.type(screen.getByRole("searchbox", { name: "搜索权限" }), "不存在");
     expect(screen.getAllByText("没有匹配的权限")).toHaveLength(2);
   });
@@ -195,82 +218,5 @@ describe("DualListEditor", () => {
     await user.click(screen.getByRole("button", { name: "添加已选权限" }));
 
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "邀请用户" })).toHaveFocus());
-  });
-
-  it("moves the selected rows when dropped into the opposite panel", async () => {
-    const user = userEvent.setup();
-    const onTransfer = vi.fn();
-    render(<DualListEditor {...props} onTransfer={onTransfer} />);
-
-    await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
-    await user.click(screen.getByRole("checkbox", { name: "导出报表" }));
-
-    await waitFor(() => expect(dragAndDrop.monitorForElements).toHaveBeenCalled());
-    const monitorCalls = dragAndDrop.monitorForElements.mock.calls as unknown as Array<
-      [{ onDrop: (event: unknown) => void }]
-    >;
-    const monitor = monitorCalls.at(-1)?.[0];
-    expect(monitor).toBeDefined();
-    monitor!.onDrop({
-      source: { data: { type: "transfer-item", side: "available", id: "report.export" } },
-      location: {
-        current: { dropTargets: [{ data: { type: "transfer-panel", side: "assigned" } }] },
-      },
-    });
-
-    expect(onTransfer).toHaveBeenCalledWith({
-      direction: "assign",
-      ids: ["report.export", "user.invite"],
-    });
-  });
-
-  it("announces a no-op when dropped back into the source panel", async () => {
-    const user = userEvent.setup();
-    const onTransfer = vi.fn();
-    render(<DualListEditor {...props} onTransfer={onTransfer} />);
-
-    await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
-    await waitFor(() => expect(dragAndDrop.monitorForElements).toHaveBeenCalled());
-    const monitorCalls = dragAndDrop.monitorForElements.mock.calls as unknown as Array<
-      [{ onDrop: (event: unknown) => void }]
-    >;
-    const monitor = monitorCalls.at(-1)?.[0];
-    expect(monitor).toBeDefined();
-
-    act(() => {
-      monitor!.onDrop({
-        source: { data: { type: "transfer-item", side: "available", id: "user.invite" } },
-        location: {
-          current: { dropTargets: [{ data: { type: "transfer-panel", side: "available" } }] },
-        },
-      });
-    });
-
-    expect(onTransfer).not.toHaveBeenCalled();
-    expect(screen.getByRole("status")).toHaveTextContent("该权限已在此列表中");
-  });
-
-  it("uses a selected-item count in the drag preview", async () => {
-    const user = userEvent.setup();
-    render(<DualListEditor {...props} onTransfer={vi.fn()} />);
-    await user.click(screen.getByRole("checkbox", { name: "邀请用户" }));
-    await user.click(screen.getByRole("checkbox", { name: "导出报表" }));
-
-    const registrations = dragAndDrop.draggable.mock.calls as unknown as Array<
-      [{ getInitialData: () => unknown; onGenerateDragPreview: (event: unknown) => void }]
-    >;
-    const registration = registrations.findLast(
-      ([options]) => (options.getInitialData() as { id?: string }).id === "report.export",
-    )?.[0];
-    expect(registration).toBeDefined();
-
-    const nativeSetDragImage = vi.fn();
-    registration!.onGenerateDragPreview({ nativeSetDragImage });
-
-    expect(nativeSetDragImage).toHaveBeenCalledWith(
-      expect.objectContaining({ textContent: "已选择 2 项" }),
-      0,
-      0,
-    );
   });
 });

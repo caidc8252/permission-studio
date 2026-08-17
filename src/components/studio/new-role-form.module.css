@@ -49,6 +49,12 @@
   margin: 0;
 }
 
+.dialogSubtitle {
+  margin: 0;
+  color: var(--muted, #64748b);
+  font-size: 0.82rem;
+}
+
 .header h2 {
   font-size: 1.25rem;
 }
@@ -104,7 +110,8 @@
 }
 
 .idField,
-.nameField {
+.nameField,
+.descriptionField {
   grid-column: span 2;
 }
 
@@ -114,13 +121,34 @@
   padding: 0;
 }
 
-.identity label {
+.identity > label,
+.nameField,
+.descriptionField {
   display: grid;
   align-content: start;
   gap: 6px;
   color: var(--text, #172033);
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.nameFieldHeader {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.translateButton {
+  width: auto;
+  padding: 3px 7px;
+  color: var(--accent-strong, #1d4ed8);
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 28%, var(--surface-border, #d7e0ec));
+  background: var(--surface, #ffffff);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .identity input {
@@ -130,6 +158,24 @@
   border: 1px solid var(--surface-border, #d7e0ec);
   border-radius: 8px;
   background: var(--surface, #ffffff);
+}
+
+.descriptionField textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 9px 10px;
+  resize: vertical;
+  color: inherit;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.descriptionField textarea[aria-invalid="true"] {
+  border-color: var(--danger, #b42318);
 }
 
 .identity input[aria-invalid="true"] {
@@ -144,6 +190,10 @@
 
 .identity small[role="alert"] {
   color: var(--danger, #b42318);
+}
+
+.identity .translationSuccess {
+  color: #15803d;
 }
 
 .permissions {
@@ -174,6 +224,75 @@
   font-weight: 750;
 }
 
+.compactForm {
+  height: auto;
+  min-height: 0;
+}
+
+.compactBody {
+  overflow: visible;
+}
+
+.roleCodeWarning {
+  margin: 0;
+  padding: 10px 12px;
+  color: #92400e;
+  border: 1px solid #f3d49a;
+  border-radius: 9px;
+  background: #fff8e8;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.compactField {
+  display: grid;
+  gap: 8px;
+  color: var(--text, #172033);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.compactField input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+}
+
+.compactField input[aria-invalid="true"] {
+  border-color: var(--danger, #b42318);
+}
+
+.compactField small {
+  color: var(--muted, #64748b);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.compactField small[role="alert"] {
+  color: var(--danger, #b42318);
+}
+
+@media (min-width: 901px) {
+  .newRoleBody {
+    grid-template-rows: auto minmax(36rem, 1fr);
+    align-content: stretch;
+    overflow-y: auto;
+  }
+
+  .permissions {
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .permissions > section {
+    min-height: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .identity {
     grid-template-columns: 1fr;
@@ -181,7 +300,8 @@
 
   .codeField,
   .idField,
-  .nameField {
+  .nameField,
+  .descriptionField {
     grid-column: auto;
   }
 }

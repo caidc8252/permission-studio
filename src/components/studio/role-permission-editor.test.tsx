@@ -2,33 +2,12 @@
 
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const dragAndDrop = vi.hoisted(() => ({
-  combine: vi.fn(
-    (...cleanups: Array<() => void>) =>
-      () =>
-        cleanups.forEach((cleanup) => cleanup()),
-  ),
-  draggable: vi.fn(() => () => undefined),
-  dropTargetForElements: vi.fn(() => () => undefined),
-  monitorForElements: vi.fn(() => () => undefined),
-}));
-
-vi.mock("@atlaskit/pragmatic-drag-and-drop/combine", () => ({
-  combine: dragAndDrop.combine,
-}));
-
-vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => ({
-  draggable: dragAndDrop.draggable,
-  dropTargetForElements: dragAndDrop.dropTargetForElements,
-  monitorForElements: dragAndDrop.monitorForElements,
-}));
-
 import { RolePermissionEditor } from "@/src/components/studio/role-permission-editor";
-import { createEmptyDraft, setRolePermissionMembership } from "@/src/domain/draft";
+import { addNewRole, createEmptyDraft, setRolePermissionMembership } from "@/src/domain/draft";
 import type { PermissionStudioModel } from "@/src/domain/model";
 import { validModel } from "@/tests/fixtures/model";
 
@@ -88,7 +67,11 @@ const model: PermissionStudioModel = {
   },
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("RolePermissionEditor", () => {
   it("edits only the selected role and preserves other role changes", async () => {
@@ -99,6 +82,11 @@ describe("RolePermissionEditor", () => {
     ]);
     render(<RolePermissionEditor model={model} draft={draft} onDraftChange={onDraftChange} />);
 
+    await user.click(
+      within(screen.getByRole("region", { name: "可添加权限" })).getByRole("button", {
+        name: "订单 1 / 2",
+      }),
+    );
     await user.click(screen.getByRole("checkbox", { name: "管理订单" }));
     await user.click(screen.getByRole("button", { name: "添加已选权限" }));
 
@@ -108,6 +96,31 @@ describe("RolePermissionEditor", () => {
           preset_ops: ["orders.manage", "orders.view"],
           preset_support: ["orders.manage"],
         },
+      }),
+    );
+  });
+
+  it("adds one permission directly from its row", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    render(
+      <RolePermissionEditor
+        model={model}
+        draft={createEmptyDraft()}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    await user.click(
+      within(screen.getByRole("region", { name: "可添加权限" })).getByRole("button", {
+        name: "订单 1 / 2",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "添加：管理订单" }));
+
+    expect(onDraftChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rolePermissions: { preset_ops: ["orders.manage", "orders.view"] },
       }),
     );
   });
@@ -122,6 +135,12 @@ describe("RolePermissionEditor", () => {
     expect(screen.queryByText("自定义运营")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "运营（preset_ops）" })).toBeVisible();
     expect(screen.getByText("preset_ops")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "运营（preset_ops）", description: "运营角色。" }),
+    ).toBeVisible();
+    const roleCard = screen.getByRole("button", { name: "运营（preset_ops）" });
+    expect(within(roleCard).getByText("运营角色。")).toHaveAttribute("title", "运营角色。");
+    expect(within(roleCard).getByText("1 项权限")).toBeVisible();
   });
 
   it("finds a role by its code", async () => {
@@ -145,8 +164,8 @@ describe("RolePermissionEditor", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "仅显示有变更的角色" }));
 
-    expect(screen.getByRole("button", { name: /客服/ })).toBeVisible();
-    expect(screen.queryByRole("button", { name: /运营/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "客服（preset_support）" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "运营（preset_ops）" })).not.toBeInTheDocument();
   });
 
   it("creates a unique role and assigns initial permissions with the shared transfer editor", async () => {
@@ -167,6 +186,15 @@ describe("RolePermissionEditor", () => {
     await user.type(screen.getByRole("textbox", { name: "新角色中文名称" }), "审计员");
     await user.type(screen.getByRole("textbox", { name: "新角色英文名称" }), "Auditor");
     await user.type(screen.getByRole("textbox", { name: "新角色日文名称" }), "監査担当者");
+    await user.type(screen.getByRole("textbox", { name: "新角色中文描述" }), "查看审计记录");
+    await user.type(
+      screen.getByRole("textbox", { name: "新角色英文描述" }),
+      "Reviews audit records",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "新角色日文描述" }),
+      "監査記録を確認します",
+    );
     await user.type(screen.getByRole("spinbutton", { name: "新角色 ID" }), "99");
 
     const permissions = screen.getByRole("region", { name: "新角色的初始权限" });
@@ -175,8 +203,7 @@ describe("RolePermissionEditor", () => {
       "订单",
     );
     expect(within(permissions).queryByText("邀请用户")).not.toBeInTheDocument();
-    await user.click(within(permissions).getByRole("checkbox", { name: "查看订单" }));
-    await user.click(within(permissions).getByRole("button", { name: "添加已选权限" }));
+    await user.click(within(permissions).getByRole("button", { name: "添加：查看订单" }));
     await user.click(screen.getByRole("button", { name: "添加到变更草稿" }));
 
     expect(onDraftChange).toHaveBeenCalledWith({
@@ -185,13 +212,240 @@ describe("RolePermissionEditor", () => {
           roleId: 99,
           code: "preset_auditor",
           names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+          descriptions: {
+            en: "Reviews audit records",
+            "zh-CN": "查看审计记录",
+            ja: "監査記録を確認します",
+          },
           permissionCodes: ["orders.view"],
         },
       ],
+      roleRenames: {},
       rolePermissions: {},
       contractMenus: {},
       contractWidgets: {},
     });
+  });
+
+  it("fills English and Japanese names by translating the Chinese name on demand", async () => {
+    const user = userEvent.setup();
+    const fetcher = vi.fn(async () => Response.json({ data: { en: "Auditor", ja: "監査担当者" } }));
+    vi.stubGlobal("fetch", fetcher);
+    render(
+      <RolePermissionEditor model={model} draft={createEmptyDraft()} onDraftChange={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "新增角色" }));
+    const translate = screen.getByRole("button", { name: "将中文名称翻译为英文和日文" });
+    expect(translate).toBeDisabled();
+    await user.type(screen.getByRole("textbox", { name: "新角色中文名称" }), "审计员");
+    await user.click(translate);
+
+    expect(fetcher).toHaveBeenCalledWith("/api/translate-role-name", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "审计员" }),
+    });
+    expect(screen.getByRole("textbox", { name: "新角色英文名称" })).toHaveValue("Auditor");
+    expect(screen.getByRole("textbox", { name: "新角色日文名称" })).toHaveValue("監査担当者");
+    expect(screen.getByText("已填充英文和日文名称")).toBeVisible();
+  });
+
+  it("fills English and Japanese descriptions by translating the Chinese description", async () => {
+    const user = userEvent.setup();
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        data: { en: "Reviews audit records", ja: "監査記録を確認します" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    render(
+      <RolePermissionEditor model={model} draft={createEmptyDraft()} onDraftChange={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "新增角色" }));
+    const translate = screen.getByRole("button", { name: "将中文描述翻译为英文和日文" });
+    expect(translate).toBeDisabled();
+    await user.type(screen.getByRole("textbox", { name: "新角色中文描述" }), "查看审计记录");
+    await user.click(translate);
+
+    expect(fetcher).toHaveBeenCalledWith("/api/translate-role-name", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "查看审计记录" }),
+    });
+    expect(screen.getByRole("textbox", { name: "新角色英文描述" })).toHaveValue(
+      "Reviews audit records",
+    );
+    expect(screen.getByRole("textbox", { name: "新角色日文描述" })).toHaveValue(
+      "監査記録を確認します",
+    );
+    expect(screen.getByText("已填充英文和日文描述")).toBeVisible();
+  });
+
+  it("reopens and updates a role created in the current draft", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    const draft = addNewRole(createEmptyDraft(), model, {
+      roleId: 99,
+      code: "preset_auditor",
+      names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+      descriptions: {
+        en: "Reviews audit records",
+        "zh-CN": "查看审计记录",
+        ja: "監査記録を確認します",
+      },
+      permissionCodes: ["orders.view"],
+    });
+    render(
+      <RolePermissionEditor
+        model={model}
+        draft={draft}
+        selectedRoleCode="preset_auditor"
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "编辑角色" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "角色操作：审计员" }));
+    await user.click(screen.getByRole("menuitem", { name: "编辑角色" }));
+    const dialog = screen.getByRole("dialog", { name: "编辑角色" });
+    expect(within(dialog).getByRole("textbox", { name: "新角色编码" })).toHaveValue(
+      "preset_auditor",
+    );
+    const transfer = within(dialog).getByRole("region", { name: "新角色的初始权限" });
+    expect(within(transfer).getByRole("region", { name: "初始权限" })).toHaveTextContent(
+      "查看订单",
+    );
+
+    const chineseName = within(dialog).getByRole("textbox", { name: "新角色中文名称" });
+    await user.clear(chineseName);
+    await user.type(chineseName, "复核员");
+    await user.click(within(dialog).getByRole("button", { name: "保存角色修改" }));
+
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      newRoles: [
+        {
+          ...draft.newRoles[0],
+          names: { en: "Auditor", "zh-CN": "复核员", ja: "監査担当者" },
+        },
+      ],
+    });
+  });
+
+  it("renames an existing role code with duplicate validation", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    render(
+      <RolePermissionEditor
+        model={model}
+        draft={createEmptyDraft()}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "角色操作：运营" }));
+    await user.click(screen.getByRole("menuitem", { name: "修改角色编码" }));
+    const dialog = screen.getByRole("dialog", { name: "修改角色编码" });
+    const input = within(dialog).getByRole("textbox", { name: "修改后的角色编码" });
+    await user.clear(input);
+    await user.type(input, "preset_support");
+    await user.click(within(dialog).getByRole("button", { name: "保存角色编码" }));
+    expect(within(dialog).getByText("角色编码已存在")).toBeVisible();
+
+    await user.clear(input);
+    await user.type(input, "preset_operations");
+    await user.click(within(dialog).getByRole("button", { name: "保存角色编码" }));
+
+    expect(onDraftChange).toHaveBeenCalledWith({
+      newRoles: [],
+      roleRenames: { preset_ops: "preset_operations" },
+      rolePermissions: {},
+      contractMenus: {},
+      contractWidgets: {},
+    });
+  });
+
+  it("falls back to an existing role when the selected new role is discarded", () => {
+    const draft = addNewRole(createEmptyDraft(), model, {
+      roleId: 99,
+      code: "preset_1312",
+      names: { en: "Temporary", "zh-CN": "临时角色", ja: "一時ロール" },
+      permissionCodes: [],
+    });
+    const onSelectedRoleCodeChange = vi.fn();
+    const { rerender } = render(
+      <RolePermissionEditor
+        model={model}
+        draft={draft}
+        selectedRoleCode="preset_1312"
+        onSelectedRoleCodeChange={onSelectedRoleCodeChange}
+        onDraftChange={vi.fn()}
+      />,
+    );
+
+    rerender(
+      <RolePermissionEditor
+        model={model}
+        draft={createEmptyDraft()}
+        selectedRoleCode="preset_1312"
+        onSelectedRoleCodeChange={onSelectedRoleCodeChange}
+        onDraftChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "运营" })).toBeVisible();
+    expect(onSelectedRoleCodeChange).toHaveBeenLastCalledWith("preset_ops");
+  });
+
+  it("adds an existing role deletion to the draft after confirmation", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(
+      <RolePermissionEditor
+        model={model}
+        draft={createEmptyDraft()}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "角色操作：运营" }));
+    await user.click(screen.getByRole("menuitem", { name: "删除角色" }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("不会自动迁移线上已有的角色绑定"),
+    );
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...createEmptyDraft(),
+      deletedRoleCodes: ["preset_ops"],
+    });
+  });
+
+  it("removes a newly created role from the draft instead of recording a deletion", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const draft = addNewRole(createEmptyDraft(), model, {
+      roleId: 99,
+      code: "preset_auditor",
+      names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+      permissionCodes: [],
+    });
+    render(
+      <RolePermissionEditor
+        model={model}
+        draft={draft}
+        selectedRoleCode="preset_auditor"
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "角色操作：审计员" }));
+    await user.click(screen.getByRole("menuitem", { name: "删除角色" }));
+
+    expect(onDraftChange).toHaveBeenCalledWith(createEmptyDraft());
   });
 
   it("shows duplicate errors for existing role identity fields", async () => {
@@ -232,5 +486,24 @@ describe("RolePermissionEditor", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps role dialogs open when their backdrop is clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <RolePermissionEditor model={model} draft={createEmptyDraft()} onDraftChange={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "新增角色" }));
+    const newRoleDialog = screen.getByRole("dialog", { name: "新增角色" });
+    fireEvent.click(newRoleDialog);
+    expect(newRoleDialog).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "关闭新增角色弹窗" }));
+    await user.click(screen.getByRole("button", { name: "角色操作：运营" }));
+    await user.click(screen.getByRole("menuitem", { name: "修改角色编码" }));
+    const editCodeDialog = screen.getByRole("dialog", { name: "修改角色编码" });
+    fireEvent.click(editCodeDialog);
+    expect(editCodeDialog).toBeVisible();
   });
 });
