@@ -18,27 +18,9 @@
   gap: 18px;
 }
 
-.sidebar h2,
-.heading h2,
-.heading p,
-.sidebarHint,
-.eyebrow {
+.sidebar h2 {
   margin: 0;
-}
-
-.eyebrow {
-  color: var(--accent, #2563eb);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
-
-.sidebarHint,
-.heading p,
-.empty {
-  margin-top: 5px;
-  color: var(--muted, #64748b);
-  font-size: 0.86rem;
+  font-size: 1rem;
 }
 
 .contractList {
@@ -60,10 +42,6 @@
   font-weight: 800;
 }
 
-.contractList button small {
-  color: var(--muted, #64748b);
-}
-
 .contractList button[aria-pressed="true"] {
   border-color: var(--accent, #2563eb);
   background: var(--accent-soft, #eaf2ff);
@@ -78,22 +56,10 @@
   padding: 4px 0 0;
 }
 
-.heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.lockedBadge {
-  padding: 5px 10px;
-  border: 1px solid #f2c36b;
-  border-radius: 999px;
-  background: var(--warning-soft, #fff7e6);
-  color: var(--warning, #9a5b08);
-  font-size: 0.75rem;
-  font-weight: 800;
-  white-space: nowrap;
+.empty {
+  margin-top: 5px;
+  color: var(--muted, #64748b);
+  font-size: 0.86rem;
 }
 
 @media (max-width: 920px) {
@@ -109,9 +75,5 @@
 @media (max-width: 560px) {
   .sidebar {
     padding: 12px;
-  }
-
-  .heading {
-    align-items: start;
   }
 }

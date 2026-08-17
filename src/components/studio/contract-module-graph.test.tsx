@@ -190,16 +190,21 @@ describe("ContractModuleGraph", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "收起订单" }));
-    await user.type(screen.getByRole("searchbox", { name: "搜索模块" }), "history");
+    const searchbox = screen.getByRole("searchbox", { name: "搜索模块" });
+    const canvas = screen.getByTestId("react-flow").parentElement;
+
+    expect(canvas).toContainElement(searchbox);
+    expect(screen.queryByText("可按名称或代码定位节点")).not.toBeInTheDocument();
+    await user.type(searchbox, "history");
 
     expect(screen.getByRole("checkbox", { name: "启用订单历史" })).toBeVisible();
-    expect(screen.getByText("找到 1 个结果")).toBeVisible();
+    expect(screen.getByText("1 个结果")).toBeVisible();
     await waitFor(() => expect(flow.setCenter).toHaveBeenCalled());
     await user.clear(screen.getByRole("searchbox", { name: "搜索模块" }));
     expect(screen.queryByRole("checkbox", { name: "启用订单历史" })).not.toBeInTheDocument();
   });
 
-  it("provides fit and layout tools plus a color-independent legend", async () => {
+  it("keeps canvas tools available without explanatory chrome", async () => {
     const user = userEvent.setup();
     render(
       <ContractModuleGraph
@@ -211,9 +216,10 @@ describe("ContractModuleGraph", () => {
       />,
     );
 
-    expect(screen.getByText("已启用：蓝色实线")).toBeVisible();
-    expect(screen.getByText("部分启用：橙色关系")).toBeVisible();
-    expect(screen.getByText("未启用：灰色虚线")).toBeVisible();
+    expect(screen.queryByText("已启用：蓝色实线")).not.toBeInTheDocument();
+    expect(screen.queryByText("部分启用：橙色关系")).not.toBeInTheDocument();
+    expect(screen.queryByText("未启用：灰色虚线")).not.toBeInTheDocument();
+    expect(screen.queryByText(/拖动空白处平移/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "适应画布" }));
     expect(flow.fitView).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "自动整理" })).toBeEnabled();

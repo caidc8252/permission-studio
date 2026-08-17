@@ -148,42 +148,37 @@ export function ContractModuleGraph({
 
   return (
     <section className={styles.graphShell} aria-label={`${contractType} 合同模块关系图`}>
-      <div className={styles.toolbar}>
-        <label className={styles.searchField}>
-          <span>搜索模块</span>
-          <input
-            type="search"
-            value={query}
-            placeholder="输入名称或代码"
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-        </label>
-        <div className={styles.searchStatus} aria-live="polite">
-          {query ? `找到 ${projection.matchIds.length} 个结果` : "可按名称或代码定位节点"}
-        </div>
-        {projection.matchIds.length > 1 ? (
-          <button type="button" onClick={goToNextMatch}>
-            下一个结果
-          </button>
-        ) : null}
-        <div className={styles.toolbarActions}>
-          <button type="button" onClick={fitCanvas}>
-            适应画布
-          </button>
-          <button type="button" disabled={disabled} onClick={resetLayout}>
-            自动整理
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.legend} aria-label="关系状态图例">
-        <span data-legend="active">已启用：蓝色实线</span>
-        <span data-legend="mixed">部分启用：橙色关系</span>
-        <span data-legend="inactive">未启用：灰色虚线</span>
-        <span>拖动空白处平移 · 滚轮缩放 · 拖动节点整理</span>
-      </div>
-
       <div className={styles.canvas}>
+        <div className={styles.canvasToolbar}>
+          <div className={styles.searchControl}>
+            <input
+              type="search"
+              aria-label="搜索模块"
+              value={query}
+              placeholder="输入名称或代码"
+              onChange={(event) => setQuery(event.currentTarget.value)}
+            />
+            {query ? (
+              <span className={styles.searchStatus} aria-live="polite">
+                {projection.matchIds.length} 个结果
+              </span>
+            ) : null}
+            {projection.matchIds.length > 1 ? (
+              <button type="button" onClick={goToNextMatch}>
+                下一个
+              </button>
+            ) : null}
+          </div>
+          <div className={styles.toolbarActions}>
+            {disabled ? <span className={styles.lockedBadge}>只读</span> : null}
+            <button type="button" onClick={fitCanvas}>
+              适应画布
+            </button>
+            <button type="button" disabled={disabled} onClick={resetLayout}>
+              自动整理
+            </button>
+          </div>
+        </div>
         <ReactFlow<ContractModuleFlowNode>
           aria-label={`${contractType} 合同模块关系图画布`}
           nodes={nodes}

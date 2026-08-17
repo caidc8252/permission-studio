@@ -64,6 +64,9 @@ describe("ContractModuleEditor", () => {
     );
 
     expect(screen.getByLabelText("ISO 合同模块关系图")).toBeVisible();
+    expect(screen.queryByText("RELATIONSHIP MAP")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "ISO 模块关系" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/直接勾选节点修改权限/)).not.toBeInTheDocument();
     expect(screen.queryByText("可启用模块")).not.toBeInTheDocument();
     expect(screen.queryByText("已启用模块")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "启用已选模块" })).not.toBeInTheDocument();
