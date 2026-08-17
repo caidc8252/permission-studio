@@ -32,9 +32,9 @@ export function buildPullRequestBody(input: PullRequestBodyInput): string {
   const roleRows = input.change.roleChanges.length
     ? input.change.roleChanges.map(
         (role) =>
-          `| \`${cell(role.roleCode)}\` | ${role.newRoleCode ? `\`${cell(role.newRoleCode)}\`` : "—"} | ${values(role.add)} | ${values(role.remove)} |`,
+          `| \`${cell(role.roleCode)}\` | ${role.newRoleCode ? `\`${cell(role.newRoleCode)}\`` : "—"} | ${role.names ? `${cell(role.names["zh-CN"])}<br>${cell(role.names.en)}<br>${cell(role.names.ja)}` : "—"} | ${values(role.add)} | ${values(role.remove)} |`,
       )
-    : ["| — | — | — | — |"];
+    : ["| — | — | — | — | — |"];
   const deletedRoleRows = input.change.deletedRoleCodes?.length
     ? input.change.deletedRoleCodes.map((roleCode) => `| \`${cell(roleCode)}\` |`)
     : ["| — |"];
@@ -71,8 +71,8 @@ export function buildPullRequestBody(input: PullRequestBodyInput): string {
     "",
     "### Role permissions",
     "",
-    "| Role | New code | Add | Remove |",
-    "| --- | --- | --- | --- |",
+    "| Role | New code | Names (中 / EN / 日) | Add | Remove |",
+    "| --- | --- | --- | --- | --- |",
     ...roleRows,
     "",
     "### Contract modules",

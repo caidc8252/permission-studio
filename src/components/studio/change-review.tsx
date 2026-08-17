@@ -115,6 +115,7 @@ export function ChangeReview({
         ...impact.addedRoles.map((role) => ({ roleCode: role.code })),
         ...(impact.deletedRoleCodes ?? []).map((roleCode) => ({ roleCode })),
         ...impact.renamedRoles.map((role) => ({ roleCode: role.oldCode })),
+        ...impact.updatedRoleNames,
         ...impact.addedRolePermissions,
         ...impact.removedRolePermissions,
       ].map((item) => item.roleCode),
@@ -131,6 +132,7 @@ export function ChangeReview({
     impact.addedRoles.length +
     (impact.deletedRoleCodes?.length ?? 0) +
     impact.renamedRoles.length +
+    impact.updatedRoleNames.length +
     impact.addedRolePermissions.length +
     impact.removedRolePermissions.length +
     impact.addedContractOwners.length +
@@ -172,9 +174,14 @@ export function ChangeReview({
               (candidate) => candidate.oldCode === roleCode,
             );
             const deletedRole = (impact.deletedRoleCodes ?? []).includes(roleCode);
-            const roleLabel = role
-              ? translatedModelText(model, locale, role.roleName, roleCode)
-              : (newRole?.names[locale] ?? roleCode);
+            const updatedNames = impact.updatedRoleNames.find(
+              (candidate) => candidate.roleCode === roleCode,
+            );
+            const roleLabel = updatedNames
+              ? updatedNames.newNames[locale]
+              : role
+                ? translatedModelText(model, locale, role.roleName, roleCode)
+                : (newRole?.names[locale] ?? roleCode);
             const additions: ReviewItem[] = impact.addedRolePermissions
               .filter((item) => item.roleCode === roleCode)
               .map((item) => ({
@@ -211,6 +218,12 @@ export function ChangeReview({
                       {newRole ? (
                         <small className={styles.roleTranslations}>
                           EN: {newRole.names.en} · 日本語: {newRole.names.ja}
+                        </small>
+                      ) : null}
+                      {updatedNames ? (
+                        <small className={styles.roleTranslations}>
+                          名称：{updatedNames.oldNames[locale]} → {updatedNames.newNames[locale]} ·
+                          EN: {updatedNames.newNames.en} · 日本語: {updatedNames.newNames.ja}
                         </small>
                       ) : null}
                     </span>

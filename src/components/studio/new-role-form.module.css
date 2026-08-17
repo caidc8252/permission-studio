@@ -233,6 +233,17 @@
   overflow: visible;
 }
 
+.existingRoleFields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.existingRoleFields .roleCodeWarning,
+.existingRoleFields > label:first-of-type {
+  grid-column: 1 / -1;
+}
+
 .roleCodeWarning {
   margin: 0;
   padding: 10px 12px;
@@ -303,6 +314,10 @@
   .nameField,
   .descriptionField {
     grid-column: auto;
+  }
+
+  .existingRoleFields {
+    grid-template-columns: 1fr;
   }
 }
 

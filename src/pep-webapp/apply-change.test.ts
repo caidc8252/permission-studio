@@ -143,6 +143,42 @@ describe("applyPermissionChange", () => {
     expect(roles).not.toContain('"orders.manage"');
   });
 
+  it("updates all existing-role locale names atomically and idempotently", async () => {
+    const { root, catalog } = targetFixture();
+    const change = {
+      newRoles: [],
+      roleChanges: [
+        {
+          roleCode: "preset_ops",
+          roleNameKey: "role.presetOps",
+          names: { en: "Operations Admin", "zh-CN": "运营管理员", ja: "運用管理者" },
+          add: [],
+          remove: [],
+        },
+      ],
+      contractChanges: [],
+    };
+
+    const first = await applyPermissionChange(root, change);
+    const second = await applyPermissionChange(root, change);
+
+    expect(first.touchedFiles).toEqual([
+      "apps/web/manifest/catalog/i18n/en.ts",
+      "apps/web/manifest/catalog/i18n/zh-CN.ts",
+      "apps/web/manifest/catalog/i18n/ja.ts",
+    ]);
+    expect(second.touchedFiles).toEqual([]);
+    for (const [locale, name] of [
+      ["en", "Operations Admin"],
+      ["zh-CN", "运营管理员"],
+      ["ja", "運用管理者"],
+    ]) {
+      expect(readFileSync(join(catalog, "i18n", `${locale}.ts`), "utf8")).toContain(
+        `presetOps: "${name}"`,
+      );
+    }
+  });
+
   it("deletes a role and all locale entries atomically and idempotently", async () => {
     const { root, catalog } = targetFixture();
     const change = {

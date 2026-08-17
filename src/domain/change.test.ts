@@ -106,6 +106,44 @@ describe("permission change protocol", () => {
     ).toThrow(/duplicate renamed role/i);
   });
 
+  it("keeps and trims a name-only existing role change", () => {
+    expect(
+      normalizePermissionChange({
+        ...validChange,
+        roleChanges: [
+          {
+            roleCode: "preset_ops",
+            roleNameKey: "role.ops",
+            names: { en: " Operations Admin ", "zh-CN": " 运营管理员 ", ja: " 運用管理者 " },
+            add: [],
+            remove: [],
+          },
+        ],
+      }).roleChanges,
+    ).toEqual([
+      {
+        roleCode: "preset_ops",
+        roleNameKey: "role.ops",
+        names: { en: "Operations Admin", "zh-CN": "运营管理员", ja: "運用管理者" },
+        add: [],
+        remove: [],
+      },
+    ]);
+    expect(() =>
+      normalizePermissionChange({
+        ...validChange,
+        roleChanges: [
+          {
+            roleCode: "preset_ops",
+            names: { en: "Operations Admin", "zh-CN": "运营管理员", ja: "運用管理者" },
+            add: [],
+            remove: [],
+          },
+        ],
+      }),
+    ).toThrow(/provided together/i);
+  });
+
   it("normalizes role deletions and rejects delete-modify conflicts", () => {
     expect(
       normalizePermissionChange({

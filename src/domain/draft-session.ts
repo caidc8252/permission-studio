@@ -4,6 +4,7 @@ import {
   createEmptyDraft,
   deleteRole,
   renameExistingRole,
+  setExistingRoleNames,
   setContractOwnerMembership,
   setRolePermissionMembership,
   type PermissionDraft,
@@ -51,6 +52,7 @@ const draftSchema = z.strictObject({
   newRoles: z.array(newRoleSchema).max(50).default([]),
   deletedRoleCodes: z.array(editableRoleCodeSchema).max(50).optional(),
   roleRenames: z.record(editableRoleCodeSchema, editableRoleCodeSchema).default({}),
+  roleNames: z.record(editableRoleCodeSchema, roleNamesSchema).default({}),
   rolePermissions: z.record(editableRoleCodeSchema, identifierArraySchema),
   contractMenus: z.record(editableContractTypeSchema, identifierArraySchema),
   contractWidgets: z.record(editableContractTypeSchema, identifierArraySchema),
@@ -212,6 +214,21 @@ export function rebasePermissionDraft(
       rebased = renameExistingRole(rebased, newModel, roleCode, newRoleCode);
     } catch {
       conflicts.push({ kind: "role", ownerCode: roleCode, code: newRoleCode });
+    }
+  }
+
+  for (const [roleCode, names] of Object.entries(draft.roleNames ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if ((draft.deletedRoleCodes ?? []).includes(roleCode)) continue;
+    if (!isEditableRole(oldModel, roleCode) || !isEditableRole(newModel, roleCode)) {
+      conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
+      continue;
+    }
+    try {
+      rebased = setExistingRoleNames(rebased, newModel, roleCode, names);
+    } catch {
+      conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
     }
   }
 

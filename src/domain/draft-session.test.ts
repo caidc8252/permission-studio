@@ -139,6 +139,7 @@ describe("draft sessions", () => {
       draft: {
         newRoles: [],
         roleRenames: {},
+        roleNames: {},
         rolePermissions: { preset_ops: [] },
         contractMenus: {},
         contractWidgets: {},

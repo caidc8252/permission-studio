@@ -466,6 +466,7 @@ const buildImpactDiffPlaceholder = {
   addedRoles: [],
   deletedRoleCodes: [],
   renamedRoles: [],
+  updatedRoleNames: [],
   addedRolePermissions: [],
   removedRolePermissions: [],
   addedContractOwners: [],

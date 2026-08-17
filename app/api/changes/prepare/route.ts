@@ -2,7 +2,12 @@ import { z } from "zod";
 
 import { normalizePermissionChange, type PermissionChange } from "@/src/domain/change";
 import type { PermissionStudioModel } from "@/src/domain/model";
-import { normalizeNewRole, type NewRoleDraft } from "@/src/domain/new-role";
+import {
+  normalizeNewRole,
+  validateRoleNames,
+  type NewRoleDraft,
+  type NewRoleNames,
+} from "@/src/domain/new-role";
 import { ChangeJobError, type ChangeJobService } from "@/src/jobs/change-job-service";
 import { changeJobService, remoteModelLoader } from "@/src/server/runtime";
 import { isExpectedMutation } from "@/src/server/request-boundary";
@@ -13,6 +18,11 @@ const MAX_BODY_BYTES = 64 * 1024;
 const listChangeSchema = z.strictObject({
   add: z.array(z.string().min(1).max(200)).max(2_000),
   remove: z.array(z.string().min(1).max(200)).max(2_000),
+});
+const roleNamesSchema = z.strictObject({
+  en: z.string().min(1).max(100),
+  "zh-CN": z.string().min(1).max(100),
+  ja: z.string().min(1).max(100),
 });
 const prepareIntentSchema = z.strictObject({
   baseSha: z
@@ -26,11 +36,7 @@ const prepareIntentSchema = z.strictObject({
       z.strictObject({
         roleId: z.number().int().min(1).max(999),
         code: z.string().min(1).max(200),
-        names: z.strictObject({
-          en: z.string().min(1).max(100),
-          "zh-CN": z.string().min(1).max(100),
-          ja: z.string().min(1).max(100),
-        }),
+        names: roleNamesSchema,
         descriptions: z
           .strictObject({
             en: z.string().min(1).max(500),
@@ -48,6 +54,8 @@ const prepareIntentSchema = z.strictObject({
       z.strictObject({
         roleCode: z.string().min(1).max(200),
         newRoleCode: z.string().min(1).max(200).optional(),
+        roleNameKey: z.string().min(1).max(200).optional(),
+        names: roleNamesSchema.optional(),
         ...listChangeSchema.shape,
       }),
     )
@@ -93,8 +101,10 @@ function validateReferences(model: PermissionStudioModel, change: PermissionChan
   for (const roleCode of change.deletedRoleCodes ?? []) {
     if (!roles.has(roleCode)) throw new Error("unknown deleted role");
   }
+  const acceptedChangedNames: NewRoleNames[] = [];
   for (const role of change.roleChanges) {
-    if (!roles.has(role.roleCode)) throw new Error("unknown role");
+    const modelRole = model.roles.find((candidate) => candidate.code === role.roleCode);
+    if (!roles.has(role.roleCode) || !modelRole) throw new Error("unknown role");
     if (
       role.newRoleCode &&
       (roles.has(role.newRoleCode) ||
@@ -106,6 +116,17 @@ function validateReferences(model: PermissionStudioModel, change: PermissionChan
     }
     if ([...role.add, ...role.remove].some((code) => !permissions.has(code))) {
       throw new Error("unknown permission");
+    }
+    if (role.names) {
+      if (role.roleNameKey !== modelRole.roleName) throw new Error("unknown role name key");
+      const errors = validateRoleNames(
+        model,
+        [...acceptedNewRoles.map((newRole) => newRole.names), ...acceptedChangedNames],
+        role.names,
+        role.roleCode,
+      );
+      if (Object.keys(errors).length) throw new Error("invalid role names");
+      acceptedChangedNames.push(role.names);
     }
   }
   for (const contract of change.contractChanges) {

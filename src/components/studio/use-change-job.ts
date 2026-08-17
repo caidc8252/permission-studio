@@ -16,6 +16,8 @@ export interface PrepareIntent {
   roleChanges: Array<{
     roleCode: string;
     newRoleCode?: string;
+    roleNameKey?: string;
+    names?: { en: string; "zh-CN": string; ja: string };
     add: string[];
     remove: string[];
   }>;

@@ -111,6 +111,7 @@ export function RolePermissionEditor({
           return (
             impact.addedRoles.filter((item) => item.code === role.code).length +
             impact.renamedRoles.filter((item) => item.oldCode === sourceCode).length +
+            impact.updatedRoleNames.filter((item) => item.roleCode === sourceCode).length +
             impact.addedRolePermissions.filter((item) => item.roleCode === sourceCode).length +
             impact.removedRolePermissions.filter((item) => item.roleCode === sourceCode).length
           );
@@ -284,7 +285,7 @@ export function RolePermissionEditor({
                           }
                         }}
                       >
-                        {isNewRole ? "编辑角色" : "修改角色编码"}
+                        编辑角色
                       </button>
                       <button
                         type="button"

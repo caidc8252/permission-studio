@@ -112,6 +112,7 @@ describe("ChangeReview", () => {
     expect(onDraftChange).toHaveBeenCalledWith({
       newRoles: [],
       roleRenames: {},
+      roleNames: {},
       rolePermissions: {},
       contractMenus: { ISO: [] },
       contractWidgets: {},
@@ -134,6 +135,7 @@ describe("ChangeReview", () => {
     expect(onDraftChange).toHaveBeenCalledWith({
       newRoles: [],
       roleRenames: {},
+      roleNames: {},
       rolePermissions: {},
       contractMenus: {},
       contractWidgets: {},

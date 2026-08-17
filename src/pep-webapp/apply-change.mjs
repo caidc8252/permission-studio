@@ -9,6 +9,7 @@ import {
   planRoleCodeEdit,
   planRoleDeletionEdit,
   planRoleTranslationEdit,
+  planRoleTranslationNameEdit,
   planRoleTranslationDeletionEdit,
   planSourceEdits,
 } from "./source-editor.mjs";
@@ -167,6 +168,15 @@ export async function applyPermissionChange(worktreePath, change) {
     });
     if (role.newRoleCode) {
       roles = applySourceEdits(roles, planRoleCodeEdit(roles, role.roleCode, role.newRoleCode));
+    }
+    if (role.names) {
+      const stem = role.roleNameKey.slice("role.".length);
+      for (const [index, source] of translations.entries()) {
+        translations[index] = applySourceEdits(
+          source,
+          planRoleTranslationNameEdit(source, stem, role.names[locales[index]]),
+        );
+      }
     }
   }
   for (const contract of change.contractChanges ?? []) {

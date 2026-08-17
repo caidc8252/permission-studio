@@ -352,6 +352,7 @@ describe("PullRequestFlow", () => {
     expect(onDraftChange).toHaveBeenCalledWith({
       newRoles: [],
       roleRenames: {},
+      roleNames: {},
       rolePermissions: {},
       contractMenus: {},
       contractWidgets: {},

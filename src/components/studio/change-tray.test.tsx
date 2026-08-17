@@ -13,6 +13,7 @@ const impactAcrossThreeObjects: ImpactDiff = {
   addedRoles: [],
   deletedRoleCodes: [],
   renamedRoles: [],
+  updatedRoleNames: [],
   addedRolePermissions: [
     { roleCode: "preset_ops", code: "orders.manage" },
     { roleCode: "preset_support", code: "orders.view" },
@@ -83,6 +84,7 @@ describe("ChangeTray", () => {
           addedRoles: [],
           deletedRoleCodes: [],
           renamedRoles: [],
+          updatedRoleNames: [],
           addedRolePermissions: [],
           removedRolePermissions: [],
           addedContractOwners: [],

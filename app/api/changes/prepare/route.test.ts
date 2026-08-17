@@ -165,6 +165,46 @@ describe("POST /api/changes/prepare", () => {
     ).toBe(400);
   });
 
+  it("accepts unique existing-role names and rejects duplicate names", async () => {
+    const { handler, prepareChange } = setup();
+    const namedRole = {
+      roleCode: "preset_ops",
+      roleNameKey: "role.ops",
+      names: { en: "Operations Admin", "zh-CN": "运营管理员", ja: "運用管理者" },
+      add: [],
+      remove: [],
+    };
+
+    expect((await handler(request({ ...intent, roleChanges: [namedRole] }))).status).toBe(202);
+    expect(prepareChange).toHaveBeenCalledWith(
+      expect.objectContaining({ roleChanges: [namedRole] }),
+    );
+    expect(
+      (
+        await handler(
+          request({
+            ...intent,
+            roleChanges: [{ ...namedRole, roleNameKey: "role.wrong" }],
+          }),
+        )
+      ).status,
+    ).toBe(400);
+
+    const duplicate = {
+      ...namedRole,
+      names: { ...namedRole.names, "zh-CN": "审计员" },
+    };
+    const newRole = {
+      roleId: 99,
+      code: "preset_auditor",
+      names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+      permissionCodes: [],
+    };
+    expect(
+      (await handler(request({ ...intent, newRoles: [newRole], roleChanges: [duplicate] }))).status,
+    ).toBe(400);
+  });
+
   it("accepts deletion of an existing preset role and rejects unknown roles", async () => {
     const { handler, prepareChange } = setup();
 

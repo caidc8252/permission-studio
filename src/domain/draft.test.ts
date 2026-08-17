@@ -12,6 +12,7 @@ import {
   discardRoleDraft,
   renameExistingRole,
   setContractOwnerMembership,
+  setExistingRoleNames,
   setRolePermissionMembership,
   updateNewRole,
   toggleContractOwner,
@@ -130,6 +131,32 @@ describe("permission drafts", () => {
     expect(() => renameExistingRole(draft, model, "preset_ops", "preset_auditor")).toThrow(
       "角色编码已存在",
     );
+  });
+
+  it("updates existing role names in the preview and change protocol", () => {
+    const names = { en: "Operations Admin", "zh-CN": "运营管理员", ja: "運用管理者" };
+    const draft = setExistingRoleNames(createEmptyDraft(), model, "preset_ops", names);
+    const projected = applyDraftToModel(model, draft);
+    const impact = buildImpactDiff(model, draft);
+    const change = buildPermissionChange(model, draft, {
+      requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
+      title: "chore(permissions): rename operations role",
+      reason: "更新运营角色的中文、英文和日文显示名称",
+    });
+
+    expect(projected.translations.en["role.ops"]).toBe("Operations Admin");
+    expect(projected.translations["zh-CN"]["role.ops"]).toBe("运营管理员");
+    expect(projected.translations.ja["role.ops"]).toBe("運用管理者");
+    expect(impact.updatedRoleNames).toEqual([
+      {
+        roleCode: "preset_ops",
+        oldNames: { en: "Operations", "zh-CN": "运营", ja: "運用" },
+        newNames: names,
+      },
+    ]);
+    expect(change.roleChanges).toEqual([
+      { roleCode: "preset_ops", roleNameKey: "role.ops", names, add: [], remove: [] },
+    ]);
   });
 
   it("adds a role with initial permissions and includes it in the change protocol", () => {

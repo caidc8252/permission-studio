@@ -49,13 +49,48 @@ function hasControlCharacter(value: string): boolean {
   });
 }
 
-function existingRoleNames(model: PermissionStudioModel, locale: keyof NewRoleNames): Set<string> {
+function existingRoleNames(
+  model: PermissionStudioModel,
+  locale: keyof NewRoleNames,
+  excludeModelCode?: string,
+): Set<string> {
   const names = new Set<string>();
   for (const role of model.roles) {
+    if (role.code === excludeModelCode) continue;
     const value = model.translations[locale][role.roleName];
     if (value) names.add(normalizedText(value));
   }
   return names;
+}
+
+export type RoleNameField = "nameEn" | "nameZhCn" | "nameJa";
+export type RoleNameValidationErrors = Partial<Record<RoleNameField, string>>;
+
+export function validateRoleNames(
+  model: PermissionStudioModel,
+  occupiedNames: readonly NewRoleNames[],
+  names: NewRoleNames,
+  excludeModelCode?: string,
+): RoleNameValidationErrors {
+  const errors: RoleNameValidationErrors = {};
+  const locales = [
+    { locale: "zh-CN", field: "nameZhCn", label: "中文名称" },
+    { locale: "en", field: "nameEn", label: "英文名称" },
+    { locale: "ja", field: "nameJa", label: "日文名称" },
+  ] as const;
+  for (const { locale, field, label } of locales) {
+    const name = names[locale].trim();
+    const normalizedName = normalizedText(name);
+    if (!name || name.length > 100 || hasControlCharacter(name)) {
+      errors[field] = `${label}不能为空，且不能超过 100 个字符`;
+    } else if (
+      existingRoleNames(model, locale, excludeModelCode).has(normalizedName) ||
+      occupiedNames.some((candidate) => normalizedText(candidate[locale]) === normalizedName)
+    ) {
+      errors[field] = `${label}已存在`;
+    }
+  }
+  return errors;
 }
 
 export function roleI18nStem(roleCode: string): string {
@@ -107,23 +142,14 @@ export function validateNewRole(
   });
   if (codeError) errors.code = codeError;
 
-  const locales = [
-    { locale: "zh-CN", field: "nameZhCn", label: "中文名称" },
-    { locale: "en", field: "nameEn", label: "英文名称" },
-    { locale: "ja", field: "nameJa", label: "日文名称" },
-  ] as const;
-  for (const { locale, field, label } of locales) {
-    const name = input.names[locale].trim();
-    const normalizedName = normalizedText(name);
-    if (!name || name.length > 100 || hasControlCharacter(name)) {
-      errors[field] = `${label}不能为空，且不能超过 100 个字符`;
-    } else if (
-      existingRoleNames(model, locale).has(normalizedName) ||
-      otherNewRoles.some((role) => normalizedText(role.names[locale]) === normalizedName)
-    ) {
-      errors[field] = `${label}已存在`;
-    }
-  }
+  Object.assign(
+    errors,
+    validateRoleNames(
+      model,
+      otherNewRoles.map((role) => role.names),
+      input.names,
+    ),
+  );
 
   if (input.descriptions) {
     const descriptionFields = [

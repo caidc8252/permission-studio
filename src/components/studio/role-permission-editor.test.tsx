@@ -221,6 +221,7 @@ describe("RolePermissionEditor", () => {
         },
       ],
       roleRenames: {},
+      roleNames: {},
       rolePermissions: {},
       contractMenus: {},
       contractWidgets: {},
@@ -334,7 +335,7 @@ describe("RolePermissionEditor", () => {
     });
   });
 
-  it("renames an existing role code with duplicate validation", async () => {
+  it("edits an existing role code and localized names with duplicate validation", async () => {
     const user = userEvent.setup();
     const onDraftChange = vi.fn();
     render(
@@ -346,21 +347,27 @@ describe("RolePermissionEditor", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "角色操作：运营" }));
-    await user.click(screen.getByRole("menuitem", { name: "修改角色编码" }));
-    const dialog = screen.getByRole("dialog", { name: "修改角色编码" });
+    await user.click(screen.getByRole("menuitem", { name: "编辑角色" }));
+    const dialog = screen.getByRole("dialog", { name: "编辑角色" });
     const input = within(dialog).getByRole("textbox", { name: "修改后的角色编码" });
     await user.clear(input);
     await user.type(input, "preset_support");
-    await user.click(within(dialog).getByRole("button", { name: "保存角色编码" }));
+    await user.click(within(dialog).getByRole("button", { name: "保存角色修改" }));
     expect(within(dialog).getByText("角色编码已存在")).toBeVisible();
 
     await user.clear(input);
     await user.type(input, "preset_operations");
-    await user.click(within(dialog).getByRole("button", { name: "保存角色编码" }));
+    const chineseName = within(dialog).getByRole("textbox", { name: "角色中文名称" });
+    await user.clear(chineseName);
+    await user.type(chineseName, "运营管理");
+    await user.click(within(dialog).getByRole("button", { name: "保存角色修改" }));
 
     expect(onDraftChange).toHaveBeenCalledWith({
       newRoles: [],
       roleRenames: { preset_ops: "preset_operations" },
+      roleNames: {
+        preset_ops: { en: "Operations", "zh-CN": "运营管理", ja: "運用" },
+      },
       rolePermissions: {},
       contractMenus: {},
       contractWidgets: {},
@@ -501,8 +508,8 @@ describe("RolePermissionEditor", () => {
 
     await user.click(screen.getByRole("button", { name: "关闭新增角色弹窗" }));
     await user.click(screen.getByRole("button", { name: "角色操作：运营" }));
-    await user.click(screen.getByRole("menuitem", { name: "修改角色编码" }));
-    const editCodeDialog = screen.getByRole("dialog", { name: "修改角色编码" });
+    await user.click(screen.getByRole("menuitem", { name: "编辑角色" }));
+    const editCodeDialog = screen.getByRole("dialog", { name: "编辑角色" });
     fireEvent.click(editCodeDialog);
     expect(editCodeDialog).toBeVisible();
   });
