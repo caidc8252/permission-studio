@@ -135,6 +135,16 @@
   overflow-wrap: anywhere;
 }
 
+.deletionNote {
+  margin: 0;
+  padding: 12px 14px;
+  color: var(--danger, #b42318);
+  border: 1px solid color-mix(in srgb, var(--danger, #b42318) 22%, transparent);
+  border-radius: 9px;
+  background: var(--danger-soft, #fff1f0);
+  font-size: 0.82rem;
+}
+
 .undoGroup {
   padding: 7px 10px;
   color: var(--muted, #64748b);

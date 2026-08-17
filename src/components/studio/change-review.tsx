@@ -10,11 +10,17 @@ import {
   type PermissionDraft,
 } from "@/src/domain/draft";
 import type { PermissionStudioModel } from "@/src/domain/model";
+import {
+  defaultPermissionStudioLocale,
+  translatedModelText,
+  type PermissionStudioLocale,
+} from "@/src/domain/model-i18n";
 import styles from "@/src/components/studio/change-review.module.css";
 
 export interface ChangeReviewProps {
   model: PermissionStudioModel;
   draft: PermissionDraft;
+  locale?: PermissionStudioLocale;
   onDraftChange: (draft: PermissionDraft) => void;
   disabled?: boolean;
 }
@@ -28,24 +34,29 @@ interface ReviewItem {
   ref: DraftItemRef;
 }
 
-function translated(model: PermissionStudioModel, key: string, fallback: string): string {
-  return model.translations["zh-CN"][key] ?? fallback;
-}
-
-function permissionLabel(model: PermissionStudioModel, code: string): string {
+function permissionLabel(
+  model: PermissionStudioModel,
+  locale: PermissionStudioLocale,
+  code: string,
+): string {
   const permission = model.permissionRegistry[code];
-  return permission ? translated(model, permission.label, code) : code;
+  return permission ? translatedModelText(model, locale, permission.label, code) : code;
 }
 
-function ownerLabel(model: PermissionStudioModel, owner: string, kind: "menu" | "widget"): string {
+function ownerLabel(
+  model: PermissionStudioModel,
+  locale: PermissionStudioLocale,
+  owner: string,
+  kind: "menu" | "widget",
+): string {
   if (kind === "menu") {
     const menu = model.menuRegistry[owner];
-    return menu ? translated(model, menu.title, owner) : owner;
+    return menu ? translatedModelText(model, locale, menu.title, owner) : owner;
   }
   const permission = Object.values(model.permissionRegistry)
     .filter((candidate) => candidate.belongToMenuCode === owner)
     .sort((left, right) => left.code.localeCompare(right.code))[0];
-  return permission ? translated(model, permission.label, owner) : owner;
+  return permission ? translatedModelText(model, locale, permission.label, owner) : owner;
 }
 
 function ChangeList({
@@ -90,12 +101,20 @@ function ChangeList({
   );
 }
 
-export function ChangeReview({ model, draft, onDraftChange, disabled = false }: ChangeReviewProps) {
+export function ChangeReview({
+  model,
+  draft,
+  locale = defaultPermissionStudioLocale,
+  onDraftChange,
+  disabled = false,
+}: ChangeReviewProps) {
   const impact = buildImpactDiff(model, draft);
   const roleCodes = [
     ...new Set(
       [
         ...impact.addedRoles.map((role) => ({ roleCode: role.code })),
+        ...(impact.deletedRoleCodes ?? []).map((roleCode) => ({ roleCode })),
+        ...impact.renamedRoles.map((role) => ({ roleCode: role.oldCode })),
         ...impact.addedRolePermissions,
         ...impact.removedRolePermissions,
       ].map((item) => item.roleCode),
@@ -110,6 +129,8 @@ export function ChangeReview({ model, draft, onDraftChange, disabled = false }: 
   ].sort();
   const total =
     impact.addedRoles.length +
+    (impact.deletedRoleCodes?.length ?? 0) +
+    impact.renamedRoles.length +
     impact.addedRolePermissions.length +
     impact.removedRolePermissions.length +
     impact.addedContractOwners.length +
@@ -147,14 +168,18 @@ export function ChangeReview({ model, draft, onDraftChange, disabled = false }: 
           {roleCodes.map((roleCode) => {
             const role = model.roles.find((candidate) => candidate.code === roleCode);
             const newRole = impact.addedRoles.find((candidate) => candidate.code === roleCode);
+            const renamedRole = impact.renamedRoles.find(
+              (candidate) => candidate.oldCode === roleCode,
+            );
+            const deletedRole = (impact.deletedRoleCodes ?? []).includes(roleCode);
             const roleLabel = role
-              ? translated(model, role.roleName, roleCode)
-              : (newRole?.names["zh-CN"] ?? roleCode);
+              ? translatedModelText(model, locale, role.roleName, roleCode)
+              : (newRole?.names[locale] ?? roleCode);
             const additions: ReviewItem[] = impact.addedRolePermissions
               .filter((item) => item.roleCode === roleCode)
               .map((item) => ({
                 id: `role:add:${roleCode}:${item.code}`,
-                label: permissionLabel(model, item.code),
+                label: permissionLabel(model, locale, item.code),
                 code: item.code,
                 change: "新增",
                 kindLabel: "权限",
@@ -164,7 +189,7 @@ export function ChangeReview({ model, draft, onDraftChange, disabled = false }: 
               .filter((item) => item.roleCode === roleCode)
               .map((item) => ({
                 id: `role:remove:${roleCode}:${item.code}`,
-                label: permissionLabel(model, item.code),
+                label: permissionLabel(model, locale, item.code),
                 code: item.code,
                 change: "移除",
                 kindLabel: "权限",
@@ -174,11 +199,13 @@ export function ChangeReview({ model, draft, onDraftChange, disabled = false }: 
               <article className={styles.card} key={roleCode}>
                 <header className={styles.cardHeader}>
                   <div className={styles.entity}>
-                    <span className={styles.entityKind}>{newRole ? "新增角色" : "角色"}</span>
+                    <span className={styles.entityKind}>
+                      {newRole ? "新增角色" : deletedRole ? "删除角色" : "角色"}
+                    </span>
                     <span className={styles.entityIdentity}>
                       <h3>{roleLabel}</h3>
                       <code>
-                        {roleCode}
+                        {renamedRole ? `${renamedRole.oldCode} → ${renamedRole.newCode}` : roleCode}
                         {newRole ? ` · ID ${newRole.roleId}` : ""}
                       </code>
                       {newRole ? (
@@ -198,20 +225,24 @@ export function ChangeReview({ model, draft, onDraftChange, disabled = false }: 
                     撤销此角色
                   </button>
                 </header>
-                <div className={styles.changeLists}>
-                  <ChangeList
-                    title={`新增权限 ${additions.length} 项`}
-                    items={additions}
-                    onUndo={undoItem}
-                    disabled={disabled}
-                  />
-                  <ChangeList
-                    title={`移除权限 ${removals.length} 项`}
-                    items={removals}
-                    onUndo={undoItem}
-                    disabled={disabled}
-                  />
-                </div>
+                {deletedRole ? (
+                  <p className={styles.deletionNote}>将删除角色定义以及中文、英文、日文资源。</p>
+                ) : (
+                  <div className={styles.changeLists}>
+                    <ChangeList
+                      title={`新增权限 ${additions.length} 项`}
+                      items={additions}
+                      onUndo={undoItem}
+                      disabled={disabled}
+                    />
+                    <ChangeList
+                      title={`移除权限 ${removals.length} 项`}
+                      items={removals}
+                      onUndo={undoItem}
+                      disabled={disabled}
+                    />
+                  </div>
+                )}
               </article>
             );
           })}
@@ -227,7 +258,7 @@ export function ChangeReview({ model, draft, onDraftChange, disabled = false }: 
                 .filter((item) => item.contractType === contractType && item.kind === kind)
                 .map((item) => ({
                   id: `contract:${change}:${contractType}:${kind}:${item.owner}`,
-                  label: ownerLabel(model, item.owner, kind),
+                  label: ownerLabel(model, locale, item.owner, kind),
                   code: item.owner,
                   change,
                   kindLabel: kind === "menu" ? "菜单" : "组件",

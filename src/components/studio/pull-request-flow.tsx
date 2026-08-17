@@ -108,6 +108,7 @@ function toIntent(
     title: change.title,
     reason: change.reason,
     newRoles: change.newRoles,
+    deletedRoleCodes: change.deletedRoleCodes,
     roleChanges: change.roleChanges,
     contractChanges: change.contractChanges,
   };
@@ -143,6 +144,8 @@ export function PullRequestFlow({
   const reasonValid = isMetadataValueValid(reason, 500);
   const hasChanges =
     impact.addedRoles.length +
+      (impact.deletedRoleCodes?.length ?? 0) +
+      impact.renamedRoles.length +
       impact.addedRolePermissions.length +
       impact.removedRolePermissions.length +
       impact.addedContractOwners.length +

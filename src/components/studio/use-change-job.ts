@@ -12,7 +12,13 @@ export interface PrepareIntent {
     names: { en: string; "zh-CN": string; ja: string };
     permissionCodes: string[];
   }>;
-  roleChanges: Array<{ roleCode: string; add: string[]; remove: string[] }>;
+  deletedRoleCodes?: string[];
+  roleChanges: Array<{
+    roleCode: string;
+    newRoleCode?: string;
+    add: string[];
+    remove: string[];
+  }>;
   contractChanges: Array<{
     contractType: string;
     menus: { add: string[]; remove: string[] };

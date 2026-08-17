@@ -17,10 +17,16 @@ export interface ChangeTrayProps {
 function countScenario(impact: ImpactDiff, scenario: string): number {
   const [kind, ownerCode] = scenario.split(":", 2);
   if (kind === "role") {
+    const rename = impact.renamedRoles.find(
+      (item) => item.oldCode === ownerCode || item.newCode === ownerCode,
+    );
+    const sourceCode = rename?.oldCode ?? ownerCode;
     return (
       impact.addedRoles.filter((role) => role.code === ownerCode).length +
+      (impact.deletedRoleCodes ?? []).filter((roleCode) => roleCode === sourceCode).length +
+      (rename ? 1 : 0) +
       [...impact.addedRolePermissions, ...impact.removedRolePermissions].filter(
-        (item) => item.roleCode === ownerCode,
+        (item) => item.roleCode === sourceCode,
       ).length
     );
   }
@@ -46,8 +52,12 @@ export function ChangeTray({
     impact.addedRoles.length +
     impact.addedRolePermissions.length +
     impact.addedContractOwners.length;
-  const removals = impact.removedRolePermissions.length + impact.removedContractOwners.length;
-  const total = additions + removals;
+  const removals =
+    (impact.deletedRoleCodes?.length ?? 0) +
+    impact.removedRolePermissions.length +
+    impact.removedContractOwners.length;
+  const modifications = impact.renamedRoles.length;
+  const total = additions + removals + modifications;
   if (!total) return null;
 
   const discardAll = () => {
@@ -59,7 +69,7 @@ export function ChangeTray({
       <div className={styles.traySummary}>
         <strong>草稿中有 {total} 项变更</strong>
         <span>
-          新增 {additions} 项 · 移除 {removals} 项
+          新增 {additions} 项 · 修改 {modifications} 项 · 移除 {removals} 项
         </span>
         {currentObject ? (
           <span>

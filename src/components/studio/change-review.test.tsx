@@ -41,6 +41,40 @@ describe("ChangeReview", () => {
     expect(screen.getByText("订单")).toBeVisible();
   });
 
+  it("renders model-backed review copy in the selected data locale", () => {
+    render(
+      <ChangeReview
+        model={model}
+        draft={draftWithRoleAndContractChanges}
+        locale="en"
+        onDraftChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Operations" })).toBeVisible();
+    expect(screen.getByText("Manage orders")).toBeVisible();
+    expect(screen.getByText("View orders")).toBeVisible();
+    expect(screen.getByText("Orders")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "业务变更检查" })).toBeVisible();
+  });
+
+  it("renders model-backed review copy in the selected data locale", () => {
+    render(
+      <ChangeReview
+        model={model}
+        draft={draftWithRoleAndContractChanges}
+        locale="en"
+        onDraftChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Operations" })).toBeVisible();
+    expect(screen.getByText("Manage orders")).toBeVisible();
+    expect(screen.getByText("View orders")).toBeVisible();
+    expect(screen.getByText("Orders")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "业务变更检查" })).toBeVisible();
+  });
+
   it("can undo one item without discarding the object", async () => {
     const user = userEvent.setup();
     const onDraftChange = vi.fn();
@@ -77,6 +111,7 @@ describe("ChangeReview", () => {
 
     expect(onDraftChange).toHaveBeenCalledWith({
       newRoles: [],
+      roleRenames: {},
       rolePermissions: {},
       contractMenus: { ISO: [] },
       contractWidgets: {},
@@ -98,6 +133,7 @@ describe("ChangeReview", () => {
 
     expect(onDraftChange).toHaveBeenCalledWith({
       newRoles: [],
+      roleRenames: {},
       rolePermissions: {},
       contractMenus: {},
       contractWidgets: {},
@@ -185,6 +221,21 @@ describe("ChangeReview", () => {
     expect(screen.getByText("preset_auditor · ID 99")).toBeVisible();
     expect(screen.getByText("EN: Auditor · 日本語: 監査担当者")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "撤销角色 审计员 的全部变更" }));
+    expect(onDraftChange).toHaveBeenCalledWith(createEmptyDraft());
+  });
+
+  it("reviews and restores a deleted existing role", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    const draft: PermissionDraft = {
+      ...createEmptyDraft(),
+      deletedRoleCodes: ["preset_ops"],
+    };
+    render(<ChangeReview model={model} draft={draft} onDraftChange={onDraftChange} />);
+
+    expect(screen.getByText("删除角色")).toBeVisible();
+    expect(screen.getByText("将删除角色定义以及中文、英文、日文资源。")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "撤销角色 运营 的全部变更" }));
     expect(onDraftChange).toHaveBeenCalledWith(createEmptyDraft());
   });
 });

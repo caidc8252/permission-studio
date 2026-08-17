@@ -11,6 +11,8 @@ import type { ImpactDiff } from "@/src/domain/draft";
 
 const impactAcrossThreeObjects: ImpactDiff = {
   addedRoles: [],
+  deletedRoleCodes: [],
+  renamedRoles: [],
   addedRolePermissions: [
     { roleCode: "preset_ops", code: "orders.manage" },
     { roleCode: "preset_support", code: "orders.view" },
@@ -39,7 +41,7 @@ describe("ChangeTray", () => {
     );
 
     expect(screen.getByText("草稿中有 4 项变更")).toBeVisible();
-    expect(screen.getByText("新增 2 项 · 移除 2 项")).toBeVisible();
+    expect(screen.getByText("新增 2 项 · 修改 0 项 · 移除 2 项")).toBeVisible();
     expect(screen.getByText("当前运营：2 项变更")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "查看变更" }));
     expect(onReview).toHaveBeenCalledOnce();
@@ -79,6 +81,8 @@ describe("ChangeTray", () => {
       <ChangeTray
         impact={{
           addedRoles: [],
+          deletedRoleCodes: [],
+          renamedRoles: [],
           addedRolePermissions: [],
           removedRolePermissions: [],
           addedContractOwners: [],
