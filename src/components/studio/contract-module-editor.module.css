@@ -4,8 +4,7 @@
   gap: 18px;
 }
 
-.sidebar,
-.content {
+.sidebar {
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--surface-border, #d7e0ec);
@@ -73,9 +72,10 @@
 
 .content {
   display: grid;
+  min-width: 0;
   align-content: start;
   gap: 14px;
-  padding: 18px;
+  padding: 4px 0 0;
 }
 
 .heading {
@@ -107,8 +107,7 @@
 }
 
 @media (max-width: 560px) {
-  .sidebar,
-  .content {
+  .sidebar {
     padding: 12px;
   }
 

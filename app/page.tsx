@@ -5,19 +5,26 @@ import { StudioShell } from "@/src/components/studio/studio-shell";
 export default function HomePage() {
   return (
     <main className="shell">
-      <header className="hero">
-        <p className="eyebrow">PEP-WEBAPP · LOCAL POLICY TOOL</p>
-        <h1>Permission Studio</h1>
-        <p className="intro">从远端 develop 解释权限、验证变更，并在最终确认后创建 Draft PR。</p>
+      <header className="utility-bar" role="banner" aria-label="应用工具栏">
+        <div className="product-mark" aria-label="Permission Studio">
+          <span className="product-mark-icon" aria-hidden="true">
+            P
+          </span>
+          <span>Permission Studio</span>
+        </div>
+        <div className="utility-meta">
+          <div className="target-note" aria-label="目标仓库">
+            <span>{studioConfig.targetSlug}</span>
+            <span aria-hidden="true">·</span>
+            <span>{studioConfig.target.baseBranch}</span>
+          </div>
+          <HealthCard />
+        </div>
       </header>
 
-      <HealthCard />
-      <StudioShell />
-      <footer className="target-note">
-        <span>{studioConfig.targetSlug}</span>
-        <span>→</span>
-        <span>{studioConfig.target.baseBranch}</span>
-      </footer>
+      <div className="workspace-main">
+        <StudioShell />
+      </div>
     </main>
   );
 }

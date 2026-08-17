@@ -64,8 +64,12 @@ export function HealthCard() {
 
   return (
     <section className="health-card" aria-labelledby="environment-heading">
-      <div>
-        <p className="eyebrow">ENVIRONMENT</p>
+      <span
+        className="health-indicator"
+        data-state={health?.ready ? "ready" : failure || networkError ? "error" : "checking"}
+        aria-hidden="true"
+      />
+      <div className="health-copy">
         <h2 id="environment-heading">
           {networkError
             ? "无法连接本地环境检查"
@@ -81,20 +85,11 @@ export function HealthCard() {
           </div>
         ) : null}
       </div>
-      <dl>
-        <div>
-          <dt>GitHub 用户</dt>
-          <dd>{health?.login ? `@${health.login}` : "—"}</dd>
-        </div>
-        <div>
-          <dt>仓库权限</dt>
-          <dd>{health?.viewerPermission ?? "—"}</dd>
-        </div>
-        <div>
-          <dt>本地缓存</dt>
-          <dd>{health?.cacheReady ? "已创建" : "首次刷新时创建"}</dd>
-        </div>
-      </dl>
+      <p className="health-meta">
+        <span>{health?.login ? `@${health.login}` : "GitHub —"}</span>
+        <span>{health?.viewerPermission ?? "权限 —"}</span>
+        <span>{health?.cacheReady ? "缓存已创建" : "首次刷新时创建"}</span>
+      </p>
     </section>
   );
 }

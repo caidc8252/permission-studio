@@ -30,8 +30,7 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--text);
-  background:
-    radial-gradient(circle at 15% 10%, rgb(37 99 235 / 12%), transparent 34rem), var(--background);
+  background: var(--background);
   font-family:
     Inter,
     ui-sans-serif,
@@ -43,60 +42,94 @@ body {
 }
 
 .shell {
-  width: min(1440px, calc(100% - 40px));
+  width: min(1840px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 72px 0;
+  padding: 12px 0 32px;
 }
 
-.hero {
-  max-width: 760px;
-  margin-bottom: 48px;
+.utility-bar {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 4px 2px 12px;
+  border-bottom: 1px solid var(--surface-border);
 }
 
-.eyebrow {
-  margin: 0 0 12px;
-  color: var(--accent);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
+.product-mark,
+.utility-meta,
+.target-note,
+.health-card,
+.health-meta {
+  display: flex;
+  align-items: center;
 }
 
-h1,
-h2,
-p {
-  margin-top: 0;
+.product-mark {
+  gap: 9px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
-h1 {
-  margin-bottom: 16px;
-  font-size: clamp(3rem, 8vw, 6.5rem);
-  line-height: 0.92;
-  letter-spacing: -0.065em;
+.product-mark-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: var(--accent-contrast);
+  border-radius: 8px;
+  background: var(--accent);
+  font-size: 0.82rem;
 }
 
-.intro {
-  color: var(--muted);
-  font-size: 1.1rem;
-  line-height: 1.7;
+.utility-meta {
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 14px;
 }
 
 .health-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
-  gap: 32px;
-  padding: 28px;
-  border: 1px solid var(--surface-border);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  box-shadow: 0 24px 70px rgb(30 64 175 / 10%);
+  min-width: 0;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .health-card h2 {
-  font-size: 1.4rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.health-indicator {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px rgb(148 163 184 / 14%);
+}
+
+.health-indicator[data-state="ready"] {
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgb(22 163 74 / 14%);
+}
+
+.health-indicator[data-state="error"] {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgb(180 35 24 / 14%);
+}
+
+.health-copy,
+.health-detail {
+  margin: 0;
 }
 
 .health-detail {
-  color: var(--muted);
+  margin-top: 2px;
 }
 
 .command-help {
@@ -105,44 +138,42 @@ h1 {
   gap: 8px;
 }
 
-.command-help code,
-.target-note span {
-  padding: 6px 9px;
+.command-help code {
+  padding: 3px 6px;
   border: 1px solid var(--surface-border);
-  border-radius: 7px;
+  border-radius: 5px;
   background: var(--surface-subtle);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
 }
 
-dl {
-  display: grid;
-  gap: 12px;
+.health-meta {
+  gap: 6px;
   margin: 0;
+  white-space: nowrap;
 }
 
-dl div {
-  display: grid;
-  grid-template-columns: 7rem 1fr;
-  gap: 16px;
-}
-
-dt {
-  color: var(--muted);
-}
-
-dd {
-  margin: 0;
-  overflow-wrap: anywhere;
+.health-meta span + span::before {
+  margin-right: 6px;
+  content: "·";
 }
 
 .target-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 18px;
+  min-width: 0;
+  gap: 5px;
   color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.workspace-main {
+  min-width: 0;
+}
+
+h2,
+p {
+  margin-top: 0;
 }
 
 button,
@@ -215,10 +246,39 @@ input[type="search"] {
 
 @media (max-width: 720px) {
   .shell {
-    padding-top: 40px;
+    width: min(100% - 20px, 1840px);
+    padding-top: 8px;
+  }
+
+  .utility-bar,
+  .utility-meta {
+    align-items: flex-start;
+  }
+
+  .utility-bar {
+    gap: 10px;
+  }
+
+  .utility-meta {
+    flex-direction: column-reverse;
+    gap: 3px;
   }
 
   .health-card {
-    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .health-meta {
+    display: none;
+  }
+
+  .target-note {
+    max-width: 52vw;
+    overflow: hidden;
+  }
+
+  .target-note span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
