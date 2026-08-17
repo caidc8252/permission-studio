@@ -16,6 +16,8 @@ export interface ContractModuleGraphLayout {
 }
 
 const NODE_HEIGHT = 112;
+const BRANCH_GAP = 32;
+const LAYOUT_MARGIN = 28;
 
 function nodeWidth(kind: ContractModuleGraphNodeData["node"]["kind"]): number {
   if (kind === "contract") return 190;
@@ -45,6 +47,38 @@ export function layoutContractModuleGraph(
   for (const relation of projection.edges) graph.setEdge(relation.source, relation.target);
   dagre.layout(graph);
 
+  const childrenByParent = new Map<string, string[]>();
+  for (const node of projection.nodes) {
+    if (!node.parentId) continue;
+    childrenByParent.set(node.parentId, [...(childrenByParent.get(node.parentId) ?? []), node.id]);
+  }
+  const descendantsOf = (rootId: string) => {
+    const result: string[] = [];
+    const visit = (id: string) => {
+      result.push(id);
+      for (const child of childrenByParent.get(id) ?? []) visit(child);
+    };
+    visit(rootId);
+    return result;
+  };
+  const branchOffsets = new Map<string, number>();
+  const contractNode = projection.nodes.find(({ kind }) => kind === "contract");
+  let nextBranchTop = LAYOUT_MARGIN;
+  for (const branchRoot of projection.nodes.filter(
+    ({ parentId }) => parentId === contractNode?.id,
+  )) {
+    const branchIds = descendantsOf(branchRoot.id);
+    const topPositions = branchIds.map((id) => {
+      const position = graph.node(id) as { y: number };
+      return position.y - NODE_HEIGHT / 2;
+    });
+    const branchTop = Math.min(...topPositions);
+    const branchBottom = Math.max(...topPositions) + NODE_HEIGHT;
+    const offset = nextBranchTop - branchTop;
+    for (const id of branchIds) branchOffsets.set(id, offset);
+    nextBranchTop += branchBottom - branchTop + BRANCH_GAP;
+  }
+
   const nodes = projection.nodes.map((node) => {
     const position = graph.node(node.id) as { x: number; y: number };
     const width = nodeWidth(node.kind);
@@ -53,7 +87,10 @@ export function layoutContractModuleGraph(
       type: "contractModule" as const,
       position: {
         x: position.x - width / 2,
-        y: position.y - NODE_HEIGHT / 2,
+        y:
+          node.kind === "contract"
+            ? LAYOUT_MARGIN
+            : position.y - NODE_HEIGHT / 2 + (branchOffsets.get(node.id) ?? 0),
       },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,

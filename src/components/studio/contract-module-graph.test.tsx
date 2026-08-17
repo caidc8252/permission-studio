@@ -17,6 +17,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
   type MockNode = {
     id: string;
     type?: string;
+    position: { x: number; y: number };
     data: Record<string, unknown>;
   };
   type MockNodeComponent = React.ComponentType<{ data: Record<string, unknown> }>;
@@ -53,7 +54,15 @@ vi.mock("@xyflow/react", async (importOriginal) => {
       >
         {nodes.map((node) => {
           const Component = nodeTypes?.[node.type ?? ""];
-          return Component ? <Component key={node.id} data={node.data} /> : null;
+          return Component ? (
+            <div
+              key={node.id}
+              data-testid={`flow-node-${node.id}`}
+              data-position={`${node.position.x},${node.position.y}`}
+            >
+              <Component data={node.data} />
+            </div>
+          ) : null;
         })}
         {children}
       </div>
@@ -190,17 +199,27 @@ describe("ContractModuleGraph", () => {
       />,
     );
 
+    const menuGroup = screen.getByTestId("flow-node-group:ISO:menus");
     flow.fitView.mockClear();
-    await user.click(screen.getByRole("button", { name: "收起菜单" }));
-    expect(screen.queryByRole("checkbox", { name: "启用订单" })).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "启用快捷入口" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "收起组件" }));
+    expect(screen.queryByRole("checkbox", { name: "启用快捷入口" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeVisible();
+    const menuY = Number(menuGroup.getAttribute("data-position")?.split(",")[1]);
+    const widgetY = Number(
+      screen
+        .getByTestId("flow-node-group:ISO:widgets")
+        .getAttribute("data-position")
+        ?.split(",")[1],
+    );
+    expect(menuY).toBeLessThan(widgetY);
     expect(flow.fitView).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "展开菜单" }));
-    expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "展开组件" }));
+    expect(screen.getByRole("checkbox", { name: "启用快捷入口" })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "全部收起" }));
     expect(screen.queryByText("菜单")).not.toBeInTheDocument();
+    expect(flow.fitView).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "全部展开" }));
     expect(screen.getAllByText("菜单").length).toBeGreaterThan(0);
   });

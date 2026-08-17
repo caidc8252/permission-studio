@@ -99,8 +99,9 @@ export function ContractModuleGraph({
 
   useEffect(() => {
     const nextStructure = structureKey(automaticLayout.nodes);
+    const structureChanged = previousStructure.current !== nextStructure;
     setNodes((current) => {
-      if (previousStructure.current !== nextStructure) return automaticLayout.nodes;
+      if (structureChanged) return automaticLayout.nodes;
       const positions = new Map(current.map((node) => [node.id, node.position]));
       return automaticLayout.nodes.map((node) => ({
         ...node,
