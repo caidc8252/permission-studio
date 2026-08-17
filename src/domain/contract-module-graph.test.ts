@@ -153,6 +153,25 @@ describe("buildContractModuleGraph", () => {
     expect(searched.matchIds).toEqual(["menu:orders.history"]);
     expect(collapsed).toEqual(new Set(["orders"]));
   });
+
+  it("collapses whole menu and widget groups while search reveals matching descendants", () => {
+    const collapsed = new Set(["group:ISO:menus", "group:ISO:widgets"]);
+    const projection = buildContractModuleGraph(model, createEmptyDraft(), "ISO", {
+      collapsed,
+      query: "",
+    });
+
+    expect(node(projection, "group:ISO:menus").collapsed).toBe(true);
+    expect(node(projection, "group:ISO:widgets").collapsed).toBe(true);
+    expect(projection.nodes.some(({ kind }) => kind === "menu" || kind === "widget")).toBe(false);
+
+    const searched = buildContractModuleGraph(model, createEmptyDraft(), "ISO", {
+      collapsed,
+      query: "history",
+    });
+    expect(searched.nodes.map(({ id }) => id)).toContain("menu:orders.history");
+    expect(searched.nodes.map(({ id }) => id)).not.toContain("widget:quick-widget");
+  });
 });
 
 describe("toggleContractModuleGraphNode", () => {

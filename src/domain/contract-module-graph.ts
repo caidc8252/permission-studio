@@ -175,6 +175,8 @@ export function buildContractModuleGraph(
   const widgetBaseline = new Set(model.contractWidgets[contractType] ?? []);
   const widgets = widgetOwners(model);
   const query = options.query.trim().toLocaleLowerCase();
+  const isCollapsed = (id: string, legacyCode?: string) =>
+    options.collapsed.has(id) || (legacyCode ? options.collapsed.has(legacyCode) : false);
   const matchingMenuCodes = new Set<string>();
   const matchingWidgetCodes = new Set<string>();
 
@@ -204,6 +206,9 @@ export function buildContractModuleGraph(
   const anyMenuChecked = allMenus.some((code) => menuCurrent.has(code));
   const allWidgetChecked = widgets.length > 0 && widgets.every((code) => widgetCurrent.has(code));
   const anyWidgetChecked = widgets.some((code) => widgetCurrent.has(code));
+  const menuSearchActive = matchingMenuCodes.size > 0 || matches(query, "菜单");
+  const widgetSearchActive = matchingWidgetCodes.size > 0 || matches(query, "组件");
+  const contractCollapsed = isCollapsed(contractId);
 
   const contractNode: ContractModuleGraphNode = {
     id: contractId,
@@ -216,7 +221,7 @@ export function buildContractModuleGraph(
     indeterminate: false,
     change: null,
     hasChildren: true,
-    collapsed: false,
+    collapsed: contractCollapsed,
     searchMatch: matches(query, contractType),
   };
   nodes.push(contractNode);
@@ -232,13 +237,16 @@ export function buildContractModuleGraph(
     checked: allMenuChecked,
     indeterminate: anyMenuChecked && !allMenuChecked,
     change: null,
-    hasChildren: true,
-    collapsed: false,
+    hasChildren: tree.roots.length > 0,
+    collapsed: isCollapsed(menuGroupId),
     searchMatch: matches(query, "菜单"),
   };
-  nodes.push(menuGroup);
-  edges.push(edge(contractId, menuGroupId, menuGroup));
-  if (menuGroup.searchMatch) matchIds.push(menuGroupId);
+  const showMenuGroup = !contractCollapsed || menuSearchActive;
+  if (showMenuGroup) {
+    nodes.push(menuGroup);
+    edges.push(edge(contractId, menuGroupId, menuGroup));
+    if (menuGroup.searchMatch) matchIds.push(menuGroupId);
+  }
 
   const visitMenu = (code: string, parentId: string, hiddenByCollapse: boolean) => {
     const menu = model.menuRegistry[code];
@@ -262,17 +270,17 @@ export function buildContractModuleGraph(
       indeterminate: anyChecked && !checked,
       change: changeFor(code, menuCurrent, menuBaseline),
       hasChildren: childCodes.length > 0,
-      collapsed: options.collapsed.has(code),
+      collapsed: isCollapsed(id, code),
       searchMatch: matchingMenuCodes.has(code),
     };
     nodes.push(menuNode);
     edges.push(edge(parentId, id, menuNode));
     if (menuNode.searchMatch) matchIds.push(id);
-    const descendantsHidden = hiddenByCollapse || options.collapsed.has(code);
+    const descendantsHidden = hiddenByCollapse || isCollapsed(id, code);
     for (const child of childCodes) visitMenu(child, id, descendantsHidden);
   };
 
-  if (tree.roots.length === 0) {
+  if (showMenuGroup && tree.roots.length === 0 && !menuGroup.collapsed) {
     const emptyNode: ContractModuleGraphNode = {
       id: `empty:${contractType}:menus`,
       kind: "empty",
@@ -289,8 +297,10 @@ export function buildContractModuleGraph(
     };
     nodes.push(emptyNode);
     edges.push(edge(menuGroupId, emptyNode.id, emptyNode));
-  } else {
-    for (const root of tree.roots) visitMenu(root, menuGroupId, false);
+  } else if (showMenuGroup) {
+    for (const root of tree.roots) {
+      visitMenu(root, menuGroupId, contractCollapsed || menuGroup.collapsed);
+    }
   }
 
   const widgetGroup: ContractModuleGraphNode = {
@@ -303,15 +313,18 @@ export function buildContractModuleGraph(
     checked: allWidgetChecked,
     indeterminate: anyWidgetChecked && !allWidgetChecked,
     change: null,
-    hasChildren: true,
-    collapsed: false,
+    hasChildren: widgets.length > 0,
+    collapsed: isCollapsed(widgetGroupId),
     searchMatch: matches(query, "组件"),
   };
-  nodes.push(widgetGroup);
-  edges.push(edge(contractId, widgetGroupId, widgetGroup));
-  if (widgetGroup.searchMatch) matchIds.push(widgetGroupId);
+  const showWidgetGroup = !contractCollapsed || widgetSearchActive;
+  if (showWidgetGroup) {
+    nodes.push(widgetGroup);
+    edges.push(edge(contractId, widgetGroupId, widgetGroup));
+    if (widgetGroup.searchMatch) matchIds.push(widgetGroupId);
+  }
 
-  if (widgets.length === 0) {
+  if (showWidgetGroup && widgets.length === 0 && !widgetGroup.collapsed) {
     const emptyNode: ContractModuleGraphNode = {
       id: `empty:${contractType}:widgets`,
       kind: "empty",
@@ -328,8 +341,9 @@ export function buildContractModuleGraph(
     };
     nodes.push(emptyNode);
     edges.push(edge(widgetGroupId, emptyNode.id, emptyNode));
-  } else {
+  } else if (showWidgetGroup) {
     for (const owner of widgets) {
+      if ((contractCollapsed || widgetGroup.collapsed) && !matchingWidgetCodes.has(owner)) continue;
       const copy = widgetCopy(model, owner);
       const id = `widget:${owner}`;
       const widgetNode: ContractModuleGraphNode = {

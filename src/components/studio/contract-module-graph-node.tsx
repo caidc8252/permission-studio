@@ -10,7 +10,7 @@ export interface ContractModuleGraphNodeData extends Record<string, unknown> {
   node: ContractModuleGraphNode;
   disabled: boolean;
   onToggle: (kind: "menu" | "widget", code: string, checked: boolean) => void;
-  onCollapse: (code: string) => void;
+  onCollapse: (nodeId: string) => void;
 }
 
 export type ContractModuleFlowNode = Node<ContractModuleGraphNodeData, "contractModule">;
@@ -93,14 +93,14 @@ export function ContractModuleGraphNodeCard({
           {node.code ? <code>{node.code}</code> : null}
           {node.description ? <span>{node.description}</span> : null}
         </div>
-        {node.kind === "menu" && node.hasChildren ? (
+        {node.hasChildren ? (
           <button
             type="button"
             className={`${styles.collapseButton} nodrag nopan`}
             aria-label={`${node.collapsed ? "展开" : "收起"}${node.label}`}
             aria-expanded={!node.collapsed}
             disabled={disabled}
-            onClick={() => onCollapse(node.code!)}
+            onClick={() => onCollapse(node.id)}
           >
             <span aria-hidden="true">{node.collapsed ? "+" : "−"}</span>
           </button>

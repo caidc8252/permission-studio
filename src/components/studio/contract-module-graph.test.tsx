@@ -178,6 +178,31 @@ describe("ContractModuleGraph", () => {
     expect(onDraftChange).not.toHaveBeenCalled();
   });
 
+  it("collapses and expands complete node groups", async () => {
+    const user = userEvent.setup();
+    render(
+      <ContractModuleGraph
+        model={model}
+        draft={createEmptyDraft()}
+        contractType="ISO"
+        disabled={false}
+        onDraftChange={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "收起菜单" }));
+    expect(screen.queryByRole("checkbox", { name: "启用订单" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "启用快捷入口" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "展开菜单" }));
+    expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "全部收起" }));
+    expect(screen.queryByText("菜单")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "全部展开" }));
+    expect(screen.getAllByText("菜单").length).toBeGreaterThan(0);
+  });
+
   it("reveals and locates a searched descendant through a collapsed branch", async () => {
     const user = userEvent.setup();
     render(

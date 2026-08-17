@@ -71,12 +71,12 @@ export function ContractModuleGraph({
     [contractType, disabled, draft, model, onDraftChange],
   );
   const toggleCollapse = useCallback(
-    (code: string) => {
+    (nodeId: string) => {
       if (disabled) return;
       setCollapsedByContract((current) => {
         const next = new Set(current[contractType] ?? []);
-        if (next.has(code)) next.delete(code);
-        else next.add(code);
+        if (next.has(nodeId)) next.delete(nodeId);
+        else next.add(nodeId);
         return { ...current, [contractType]: [...next] };
       });
     },
@@ -96,6 +96,14 @@ export function ContractModuleGraph({
   const previousStructure = useRef(structureKey(automaticLayout.nodes));
   const [flowInstance, setFlowInstance] =
     useState<ReactFlowInstance<ContractModuleFlowNode> | null>(null);
+
+  useEffect(() => {
+    if (!flowInstance || query) return;
+    const frame = requestAnimationFrame(() => {
+      void flowInstance.fitView({ padding: 0.2, duration: 320 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [collapsed, flowInstance, query]);
 
   useEffect(() => {
     const nextStructure = structureKey(automaticLayout.nodes);
@@ -145,6 +153,13 @@ export function ContractModuleGraph({
     if (projection.matchIds.length === 0) return;
     setMatchIndex((current) => (current + 1) % projection.matchIds.length);
   };
+  const toggleAllCollapsed = () => {
+    if (disabled) return;
+    setCollapsedByContract((current) => ({
+      ...current,
+      [contractType]: collapsed.size > 0 ? [] : [`contract:${contractType}`],
+    }));
+  };
 
   return (
     <section className={styles.graphShell} aria-label={`${contractType} 合同模块关系图`}>
@@ -171,6 +186,9 @@ export function ContractModuleGraph({
           </div>
           <div className={styles.toolbarActions}>
             {disabled ? <span className={styles.lockedBadge}>只读</span> : null}
+            <button type="button" disabled={disabled} onClick={toggleAllCollapsed}>
+              {collapsed.size > 0 ? "全部展开" : "全部收起"}
+            </button>
             <button type="button" onClick={fitCanvas}>
               适应画布
             </button>

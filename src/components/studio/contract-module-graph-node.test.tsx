@@ -46,7 +46,7 @@ describe("ContractModuleGraphNodeCard", () => {
     await user.click(screen.getByRole("checkbox", { name: "启用订单" }));
     expect(onToggle).toHaveBeenCalledWith("menu", "orders", true);
     await user.click(screen.getByRole("button", { name: "收起订单" }));
-    expect(onCollapse).toHaveBeenCalledWith("orders");
+    expect(onCollapse).toHaveBeenCalledWith("menu:orders");
   });
 
   it("renders removed and disabled states without relying on color", () => {
@@ -87,6 +87,7 @@ describe("ContractModuleGraphNodeCard", () => {
     );
     expect(screen.getByRole("heading", { name: "ISO" })).toBeVisible();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收起ISO" })).toBeVisible();
 
     rerender(
       <ContractModuleGraphNodeCard
@@ -98,6 +99,7 @@ describe("ContractModuleGraphNodeCard", () => {
     );
     expect(screen.getByText("菜单")).toBeVisible();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收起菜单" })).toBeVisible();
 
     rerender(
       <ContractModuleGraphNodeCard
