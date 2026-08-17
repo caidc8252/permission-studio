@@ -48,10 +48,15 @@ export function ContractModuleGraphNodeCard({
 
   return (
     <article
-      className={styles.nodeCard}
+      className={`${styles.nodeCard} nopan`}
       data-kind={node.kind}
       data-state={stateName(node)}
       data-search-match={node.searchMatch || undefined}
+      data-clickable={editable && !disabled ? "true" : undefined}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("input, button")) return;
+        if (editable && !disabled) changeMembership(!node.checked);
+      }}
     >
       <div className={styles.nodeHeader}>
         <span className={styles.nodeKind}>

@@ -34,6 +34,10 @@
   outline-offset: 3px;
 }
 
+.nodeCard[data-clickable="true"] {
+  cursor: pointer;
+}
+
 .nodeHeader,
 .nodeMain,
 .nodeBadges {
@@ -181,7 +185,7 @@
   left: 12px;
   display: flex;
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 10px;
   pointer-events: none;
 }
@@ -238,6 +242,22 @@
   background: #f8fafc;
 }
 
+.canvas:fullscreen,
+.canvas[data-page-fullscreen] {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  border: 0;
+  border-radius: 0;
+  background: #f8fafc;
+}
+
+.canvas[data-page-fullscreen] {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+}
+
 .canvas :global(.react-flow__controls),
 .canvas :global(.react-flow__minimap) {
   overflow: hidden;
@@ -250,6 +270,16 @@
   border-color: var(--surface-border, #d7e0ec);
   background: #fff;
   color: var(--text, #172033);
+}
+
+.canvas :global(.react-flow__controls-button svg) {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .canvas :global(.react-flow__node:focus-visible) {

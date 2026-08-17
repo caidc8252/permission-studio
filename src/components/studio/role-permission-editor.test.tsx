@@ -35,6 +35,27 @@ import { validModel } from "@/tests/fixtures/model";
 const baseModel = validModel as unknown as PermissionStudioModel;
 const model: PermissionStudioModel = {
   ...baseModel,
+  permissionCodes: [...baseModel.permissionCodes, "users.invite"],
+  menuRegistry: {
+    ...baseModel.menuRegistry,
+    users: {
+      menuCode: "users",
+      title: "menu.users",
+      parentMenuCode: null,
+      path: "/users",
+      icon: "users",
+      order: 2,
+    },
+  },
+  permissionRegistry: {
+    ...baseModel.permissionRegistry,
+    "users.invite": {
+      code: "users.invite",
+      belongToMenuCode: "users",
+      label: "permission.users.invite",
+      desc: "permission.users.inviteDesc",
+    },
+  },
   roles: [
     ...baseModel.roles,
     {
@@ -60,6 +81,9 @@ const model: PermissionStudioModel = {
       "role.supportDesc": "客服角色。",
       "role.customOps": "自定义运营",
       "role.customOpsDesc": "自定义角色。",
+      "menu.users": "用户",
+      "permission.users.invite": "邀请用户",
+      "permission.users.inviteDesc": "邀请用户加入工作区。",
     },
   },
 };
@@ -146,6 +170,11 @@ describe("RolePermissionEditor", () => {
     await user.type(screen.getByRole("spinbutton", { name: "新角色 ID" }), "99");
 
     const permissions = screen.getByRole("region", { name: "新角色的初始权限" });
+    await user.selectOptions(
+      within(permissions).getByRole("combobox", { name: "权限分组" }),
+      "订单",
+    );
+    expect(within(permissions).queryByText("邀请用户")).not.toBeInTheDocument();
     await user.click(within(permissions).getByRole("checkbox", { name: "查看订单" }));
     await user.click(within(permissions).getByRole("button", { name: "添加已选权限" }));
     await user.click(screen.getByRole("button", { name: "添加到变更草稿" }));

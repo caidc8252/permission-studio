@@ -94,7 +94,7 @@ export function layoutContractModuleGraph(
       },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-      draggable: true,
+      draggable: false,
       selectable: true,
       deletable: false,
       connectable: false,

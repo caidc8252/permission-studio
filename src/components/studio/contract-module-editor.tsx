@@ -45,35 +45,35 @@ export function ContractModuleEditor({
 
   return (
     <section className={styles.editor} aria-label="合同模块编辑器">
-      <aside className={styles.sidebar} aria-label="可编辑合同">
-        <ul className={styles.contractList}>
-          {editableContracts.map((contractType) => (
-            <li key={contractType}>
-              <button
-                type="button"
-                aria-label={contractType}
-                aria-pressed={contractType === selectedContractType}
-                onClick={() => {
-                  setSelectedContractType(contractType);
-                  onSelectedContractTypeChange?.(contractType);
-                }}
-              >
-                <span>{contractType}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </aside>
-
       <div className={styles.content}>
         {selectedContractType ? (
           <ContractModuleGraph
-            key={selectedContractType}
             model={model}
             draft={draft}
             contractType={selectedContractType}
             disabled={disabled}
             onDraftChange={onDraftChange}
+            toolbar={
+              <aside className={styles.sidebar} aria-label="可编辑合同">
+                <ul className={styles.contractList}>
+                  {editableContracts.map((contractType) => (
+                    <li key={contractType}>
+                      <button
+                        type="button"
+                        aria-label={contractType}
+                        aria-pressed={contractType === selectedContractType}
+                        onClick={() => {
+                          setSelectedContractType(contractType);
+                          onSelectedContractTypeChange?.(contractType);
+                        }}
+                      >
+                        <span>{contractType}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            }
           />
         ) : (
           <p className={styles.empty}>没有可编辑的合同类型</p>

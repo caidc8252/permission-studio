@@ -53,15 +53,18 @@ export function buildPermissionTransferItems(
     const permission = model.permissionRegistry[code];
     if (!permission) continue;
     const menu = model.menuRegistry[permission.belongToMenuCode];
+    const widget = code.startsWith("widget.") || permission.belongToMenuCode.startsWith("widget.");
     items.push({
       id: code,
       label: translated(model, permission.label, code),
       description: translated(model, permission.desc, code),
-      group: translated(
-        model,
-        menu?.title ?? permission.belongToMenuCode,
-        permission.belongToMenuCode,
-      ),
+      group: widget
+        ? "Widget"
+        : translated(
+            model,
+            menu?.title ?? permission.belongToMenuCode,
+            permission.belongToMenuCode,
+          ),
       kind: "permission",
       menuOrder: menu?.order ?? Number.MAX_SAFE_INTEGER,
     });

@@ -9,10 +9,7 @@
 }
 
 .sidebar {
-  position: absolute;
-  z-index: 6;
-  top: 12px;
-  right: 12px;
+  flex: 0 1 auto;
   max-width: calc(100% - 24px);
   padding: 5px;
   border: 1px solid var(--surface-border, #d7e0ec);
@@ -20,6 +17,7 @@
   background: rgb(255 255 255 / 94%);
   box-shadow: 0 6px 20px rgb(15 23 42 / 10%);
   backdrop-filter: blur(8px);
+  pointer-events: auto;
 }
 
 .contractList {
@@ -64,10 +62,6 @@
 }
 
 @media (max-width: 920px) {
-  .sidebar {
-    top: 66px;
-  }
-
   .contractList {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -76,10 +70,6 @@
 @media (max-width: 560px) {
   .editor {
     height: auto;
-  }
-
-  .sidebar {
-    left: 12px;
   }
 
   .content {

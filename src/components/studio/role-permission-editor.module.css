@@ -29,8 +29,7 @@
   font-size: 0.85rem;
 }
 
-.search input,
-.heading select {
+.search input {
   width: 100%;
   padding: 9px 10px;
   color: inherit;
@@ -130,16 +129,8 @@
   margin: 0;
 }
 
-.heading p,
-.heading label {
+.heading p {
   color: var(--muted, #64748b);
-}
-
-.heading label {
-  display: grid;
-  gap: 6px;
-  min-width: 10rem;
-  font-size: 0.85rem;
 }
 
 .empty {
@@ -154,10 +145,6 @@
 
   .heading {
     display: grid;
-  }
-
-  .heading label {
-    min-width: 0;
   }
 
   .sidebar {

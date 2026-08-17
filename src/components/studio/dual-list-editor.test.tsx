@@ -67,6 +67,9 @@ const props: Omit<DualListEditorProps, "onTransfer"> = {
   assigned,
   labels: {
     search: "搜索权限",
+    groupFilter: "权限分组",
+    groupPlaceholder: "选择分组",
+    clearGroupFilter: "清空权限分组",
     available: "可添加权限",
     assigned: "已分配权限",
     assignSelected: "添加已选权限",
@@ -133,6 +136,26 @@ describe("DualListEditor", () => {
     expect(screen.getByText("导出报表")).toBeVisible();
     expect(screen.queryByText("邀请用户")).not.toBeInTheDocument();
     expect(onTransfer).not.toHaveBeenCalled();
+  });
+
+  it("filters both lists by group next to the permission search", async () => {
+    const user = userEvent.setup();
+    render(<DualListEditor {...props} onTransfer={vi.fn()} />);
+
+    const groupFilter = screen.getByRole("combobox", { name: "权限分组" });
+    expect(groupFilter).toHaveValue("");
+    expect(screen.queryByRole("option", { name: "全部分组" })).not.toBeInTheDocument();
+    await user.selectOptions(groupFilter, "报表");
+
+    expect(screen.getByText("导出报表")).toBeVisible();
+    expect(screen.queryByText("邀请用户")).not.toBeInTheDocument();
+    expect(screen.queryByText("查看订单")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "清空权限分组" }));
+    expect(groupFilter).toHaveValue("");
+    expect(screen.getByText("邀请用户")).toBeVisible();
+    expect(screen.getByText("查看订单")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "清空权限分组" })).not.toBeInTheDocument();
   });
 
   it("uses caller-supplied Chinese text for the empty state and drag handle", async () => {

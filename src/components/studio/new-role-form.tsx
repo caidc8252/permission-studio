@@ -23,6 +23,9 @@ export interface NewRoleFormProps {
 
 const labels: TransferLabels = {
   search: "搜索权限",
+  groupFilter: "权限分组",
+  groupPlaceholder: "选择分组",
+  clearGroupFilter: "清空权限分组",
   available: "可添加权限",
   assigned: "初始权限",
   assignSelected: "添加已选权限",

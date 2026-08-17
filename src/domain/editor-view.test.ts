@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { createEmptyDraft, setRolePermissionMembership } from "@/src/domain/draft";
-import { buildContractEditorView, buildRoleEditorView } from "@/src/domain/editor-view";
+import {
+  buildContractEditorView,
+  buildPermissionTransferItems,
+  buildRoleEditorView,
+} from "@/src/domain/editor-view";
 import type { PermissionStudioModel } from "@/src/domain/model";
 import { validModel } from "@/tests/fixtures/model";
 
@@ -68,6 +72,32 @@ describe("role editor view", () => {
     expect(view.assigned.map(({ id }) => id)).toEqual(["users.invite"]);
     expect(view.available.map(({ id }) => id)).toEqual(["orders.manage", "orders.view"]);
     expect(view.available.map(({ group }) => group)).toEqual(["订单", "订单"]);
+  });
+
+  it("collects all widget permissions into one Widget group", () => {
+    const widgetModel = {
+      ...model,
+      permissionCodes: [...model.permissionCodes, "widget.quick", "widget.status"],
+      permissionRegistry: {
+        ...model.permissionRegistry,
+        "widget.quick": {
+          code: "widget.quick",
+          belongToMenuCode: "widget.quick",
+          label: "widget.quick",
+          desc: "widget.quickDesc",
+        },
+        "widget.status": {
+          code: "widget.status",
+          belongToMenuCode: "widget.status",
+          label: "widget.status",
+          desc: "widget.statusDesc",
+        },
+      },
+    } as unknown as PermissionStudioModel;
+
+    const items = buildPermissionTransferItems(widgetModel, ["widget.quick", "widget.status"]);
+
+    expect(items.map(({ group }) => group)).toEqual(["Widget", "Widget"]);
   });
 
   it("rejects a non-preset role", () => {

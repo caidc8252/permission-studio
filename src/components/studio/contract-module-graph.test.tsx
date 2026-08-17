@@ -18,6 +18,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     id: string;
     type?: string;
     position: { x: number; y: number };
+    draggable?: boolean;
     data: Record<string, unknown>;
   };
   type MockNodeComponent = React.ComponentType<{ data: Record<string, unknown> }>;
@@ -27,6 +28,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     nodesConnectable?: boolean;
     edgesReconnectable?: boolean;
     nodesDraggable?: boolean;
+    panOnDrag?: boolean;
     onInit?: (instance: unknown) => void;
     "aria-label"?: string;
     children?: React.ReactNode;
@@ -37,6 +39,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     nodesConnectable,
     edgesReconnectable,
     nodesDraggable,
+    panOnDrag,
     onInit,
     children,
     "aria-label": ariaLabel,
@@ -51,6 +54,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
         data-connectable={String(nodesConnectable)}
         data-reconnectable={String(edgesReconnectable)}
         data-draggable={String(nodesDraggable)}
+        data-pan-on-drag={String(panOnDrag)}
       >
         {nodes.map((node) => {
           const Component = nodeTypes?.[node.type ?? ""];
@@ -59,6 +63,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
               key={node.id}
               data-testid={`flow-node-${node.id}`}
               data-position={`${node.position.x},${node.position.y}`}
+              data-node-draggable={String(node.draggable)}
             >
               <Component data={node.data} />
             </div>
@@ -73,7 +78,12 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     ReactFlow,
     Handle: () => <span data-testid="flow-handle" />,
     Background: () => <div data-testid="flow-background" />,
-    Controls: () => <div aria-label="画布缩放控件" />,
+    Controls: ({ children }: { children?: React.ReactNode }) => (
+      <div aria-label="画布缩放控件">{children}</div>
+    ),
+    ControlButton: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+      <button type="button" {...props} />
+    ),
     MiniMap: () => <div aria-label="关系图小地图" />,
   };
 });
@@ -144,10 +154,92 @@ describe("ContractModuleGraph", () => {
     expect(screen.getByRole("checkbox", { name: "启用订单历史" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "启用快捷入口" })).not.toBeChecked();
     expect(screen.getByLabelText("画布缩放控件")).toBeVisible();
+    expect(screen.getByRole("button", { name: "全屏显示画布" })).toBeVisible();
     expect(screen.getByLabelText("关系图小地图")).toBeVisible();
     expect(screen.getByTestId("flow-background")).toBeVisible();
+    expect(screen.getByTestId("react-flow")).toHaveAttribute("data-draggable", "false");
+    expect(screen.getByTestId("react-flow")).toHaveAttribute("data-pan-on-drag", "true");
+    for (const node of screen.getAllByTestId(/^flow-node-/)) {
+      expect(node).toHaveAttribute("data-node-draggable", "false");
+    }
+    for (const card of screen.getAllByRole("article")) {
+      expect(card).toHaveClass("nopan");
+    }
     expect(screen.getByTestId("react-flow")).toHaveAttribute("data-connectable", "false");
     expect(screen.getByTestId("react-flow")).toHaveAttribute("data-reconnectable", "false");
+  });
+
+  it("uses the canvas DOM element for native fullscreen and exits cleanly", async () => {
+    const user = userEvent.setup();
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: vi.fn(() => {
+        fullscreenElement = null;
+        document.dispatchEvent(new Event("fullscreenchange"));
+        return Promise.resolve();
+      }),
+    });
+
+    render(
+      <ContractModuleGraph
+        model={model}
+        draft={createEmptyDraft()}
+        contractType="ISO"
+        disabled={false}
+        onDraftChange={vi.fn()}
+        toolbar={<button type="button">ISO</button>}
+      />,
+    );
+
+    const canvas = screen.getByTestId("contract-module-canvas");
+    Object.defineProperty(canvas, "requestFullscreen", {
+      configurable: true,
+      value: vi.fn(() => {
+        fullscreenElement = canvas;
+        document.dispatchEvent(new Event("fullscreenchange"));
+        return Promise.resolve();
+      }),
+    });
+    await user.click(screen.getByRole("button", { name: "全屏显示画布" }));
+    expect(document.fullscreenElement).toBe(canvas);
+    expect(screen.getByRole("button", { name: "退出画布全屏" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "ISO" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "退出画布全屏" }));
+    expect(document.fullscreenElement).toBeNull();
+    expect(screen.getByRole("button", { name: "全屏显示画布" })).toBeVisible();
+  });
+
+  it("falls back to a page-filling canvas when native fullscreen is denied", async () => {
+    const user = userEvent.setup();
+    render(
+      <ContractModuleGraph
+        model={model}
+        draft={createEmptyDraft()}
+        contractType="ISO"
+        disabled={false}
+        onDraftChange={vi.fn()}
+      />,
+    );
+
+    const canvas = screen.getByTestId("contract-module-canvas");
+    Object.defineProperty(canvas, "requestFullscreen", {
+      configurable: true,
+      value: vi.fn(() => Promise.reject(new TypeError("not granted"))),
+    });
+    await user.click(screen.getByRole("button", { name: "全屏显示画布" }));
+
+    expect(canvas).toHaveAttribute("data-page-fullscreen", "true");
+    expect(screen.getByRole("button", { name: "退出画布全屏" })).toBeVisible();
+
+    await user.keyboard("{Escape}");
+    expect(canvas).not.toHaveAttribute("data-page-fullscreen");
+    expect(screen.getByRole("button", { name: "全屏显示画布" })).toBeVisible();
   });
 
   it("writes a cascaded module toggle to the existing permission draft", async () => {
@@ -164,6 +256,30 @@ describe("ContractModuleGraph", () => {
     );
 
     await user.click(screen.getByRole("checkbox", { name: "启用订单" }));
+    expect(onDraftChange).toHaveBeenCalledTimes(1);
+    expect(onDraftChange).toHaveBeenCalledWith(
+      expect.objectContaining({ contractMenus: { ISO: ["orders", "orders.history"] } }),
+    );
+  });
+
+  it("toggles membership when clicking an editable card body", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    render(
+      <ContractModuleGraph
+        model={model}
+        draft={createEmptyDraft()}
+        contractType="ISO"
+        disabled={false}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    const card = screen.getByRole("checkbox", { name: "启用订单" }).closest("article");
+    expect(card).toHaveAttribute("data-clickable", "true");
+    await user.click(card!);
+
+    expect(onDraftChange).toHaveBeenCalledTimes(1);
     expect(onDraftChange).toHaveBeenCalledWith(
       expect.objectContaining({ contractMenus: { ISO: ["orders", "orders.history"] } }),
     );
@@ -265,18 +381,25 @@ describe("ContractModuleGraph", () => {
     expect(screen.queryByRole("button", { name: "自动整理" })).not.toBeInTheDocument();
   });
 
-  it("locks membership changes while keeping search available", () => {
+  it("locks membership changes while keeping search available", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
     render(
       <ContractModuleGraph
         model={model}
         draft={createEmptyDraft()}
         contractType="ISO"
         disabled
-        onDraftChange={vi.fn()}
+        onDraftChange={onDraftChange}
       />,
     );
 
-    expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeDisabled();
+    const checkbox = screen.getByRole("checkbox", { name: "启用订单" });
+    const card = checkbox.closest("article");
+    expect(checkbox).toBeDisabled();
+    expect(card).not.toHaveAttribute("data-clickable");
+    await user.click(card!);
+    expect(onDraftChange).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "收起订单" })).toBeDisabled();
     expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "适应画布" })).not.toBeInTheDocument();

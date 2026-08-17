@@ -30,6 +30,9 @@ export interface RolePermissionEditorProps {
 
 const transferLabels: TransferLabels = {
   search: "搜索权限",
+  groupFilter: "权限分组",
+  groupPlaceholder: "选择分组",
+  clearGroupFilter: "清空权限分组",
   available: "可添加权限",
   assigned: "已分配权限",
   assignSelected: "添加已选权限",
@@ -69,7 +72,6 @@ export function RolePermissionEditor({
     editableRoles.some((role) => role.code === initialRoleCode) ? initialRoleCode! : firstRoleCode,
   );
   const [roleQuery, setRoleQuery] = useState("");
-  const [groupFilter, setGroupFilter] = useState("");
   const [changesOnly, setChangesOnly] = useState(false);
   const [creatingRole, setCreatingRole] = useState(false);
   const [pendingRoleCode, setPendingRoleCode] = useState<string | null>(null);
@@ -116,19 +118,6 @@ export function RolePermissionEditor({
   const view = selectedRoleCode
     ? buildRoleEditorView(projectedModel, createEmptyDraft(), selectedRoleCode)
     : null;
-  const groups = useMemo(
-    () =>
-      [
-        ...new Set(
-          [...(view?.available ?? []), ...(view?.assigned ?? [])].map((item) => item.group),
-        ),
-      ].sort((left, right) => left.localeCompare(right)),
-    [view],
-  );
-  const filterGroups = (
-    items: typeof view extends null ? never[] : NonNullable<typeof view>["available"],
-  ) => (groupFilter ? items.filter((item) => item.group === groupFilter) : items);
-
   const transfer = (request: TransferRequest) => {
     if (!view) return;
     const assigned = new Set(view.assigned.map((item) => item.id));
@@ -204,26 +193,11 @@ export function RolePermissionEditor({
                 <h2>{view.roleLabel}</h2>
                 <p>{view.roleDescription}</p>
               </div>
-              <label>
-                <span>权限分组</span>
-                <select
-                  aria-label="权限分组"
-                  value={groupFilter}
-                  onChange={(event) => setGroupFilter(event.target.value)}
-                >
-                  <option value="">全部分组</option>
-                  {groups.map((group) => (
-                    <option key={group} value={group}>
-                      {group}
-                    </option>
-                  ))}
-                </select>
-              </label>
             </header>
             <DualListEditor
               ariaLabel={`${view.roleLabel}的权限`}
-              available={filterGroups(view.available)}
-              assigned={filterGroups(view.assigned)}
+              available={view.available}
+              assigned={view.assigned}
               labels={transferLabels}
               onTransfer={transfer}
             />

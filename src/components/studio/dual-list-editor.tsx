@@ -6,7 +6,7 @@ import {
   dropTargetForElements,
   monitorForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import styles from "@/src/components/studio/dual-list-editor.module.css";
 
@@ -26,6 +26,9 @@ export interface TransferRequest {
 
 export interface TransferLabels {
   search: string;
+  groupFilter: string;
+  groupPlaceholder: string;
+  clearGroupFilter: string;
   available: string;
   assigned: string;
   assignSelected: string;
@@ -326,8 +329,10 @@ export function DualListEditor({
   const [assignedSelection, setAssignedSelection] = useState<Set<string>>(new Set());
   const [announcement, setAnnouncement] = useState("");
   const [query, setQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [draggedSide, setDraggedSide] = useState<Side | null>(null);
   const [dropTargetSide, setDropTargetSide] = useState<Side | null>(null);
+  const groupFilterId = useId();
   const destinationRefs = useRef(new Map<string, HTMLInputElement>());
   const sourceRefs = useRef(new Map<string, HTMLInputElement>());
   const availablePanelRef = useRef<HTMLElement | null>(null);
@@ -402,26 +407,67 @@ export function DualListEditor({
   });
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  const groups = useMemo(
+    () =>
+      [...new Set([...available, ...assigned].map((item) => item.group))].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    [assigned, available],
+  );
   const matching = (items: TransferItem[]) =>
-    normalizedQuery
-      ? items.filter((item) =>
+    items.filter(
+      (item) =>
+        (!groupFilter || item.group === groupFilter) &&
+        (!normalizedQuery ||
           [item.id, item.label, item.description, item.group]
             .filter((value): value is string => Boolean(value))
-            .some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
-        )
-      : items;
+            .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))),
+    );
 
   return (
     <section aria-label={ariaLabel} className={styles.transfer}>
-      <label className={styles.search}>
-        <span>{labels.search}</span>
-        <input
-          type="search"
-          aria-label={labels.search}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
+      <div className={styles.filters}>
+        <label className={styles.search}>
+          <span>{labels.search}</span>
+          <input
+            type="search"
+            aria-label={labels.search}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <div className={styles.groupFilter}>
+          <label htmlFor={groupFilterId}>{labels.groupFilter}</label>
+          <div className={styles.groupControl}>
+            <select
+              id={groupFilterId}
+              aria-label={labels.groupFilter}
+              value={groupFilter}
+              onChange={(event) => setGroupFilter(event.target.value)}
+            >
+              <option value="" hidden>
+                {labels.groupPlaceholder}
+              </option>
+              {groups.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
+              ))}
+            </select>
+            {groupFilter ? (
+              <button
+                className={styles.clearGroup}
+                type="button"
+                aria-label={labels.clearGroupFilter}
+                title={labels.clearGroupFilter}
+                onClick={() => setGroupFilter("")}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
       <div className={styles.editor}>
         <TransferPanel
           side="available"

@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/src/components/studio/contract-module-graph", () => ({
@@ -11,11 +12,13 @@ vi.mock("@/src/components/studio/contract-module-graph", () => ({
     contractType,
     draft,
     disabled,
+    toolbar,
     onDraftChange,
   }: {
     contractType: string;
     draft: { contractMenus: Record<string, string[]> };
     disabled: boolean;
+    toolbar?: ReactNode;
     onDraftChange: (draft: unknown) => void;
   }) => (
     <section aria-label={`${contractType} 合同模块关系图`}>
@@ -36,6 +39,7 @@ vi.mock("@/src/components/studio/contract-module-graph", () => ({
         搜索模块
         <input type="search" />
       </label>
+      {toolbar}
     </section>
   ),
 }));
