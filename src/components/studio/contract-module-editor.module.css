@@ -1,29 +1,74 @@
 .editor {
   position: relative;
-  display: flex;
+  display: grid;
   height: clamp(36rem, calc(100vh - 15rem), 50rem);
   min-width: 0;
   min-height: 0;
-  flex-direction: column;
-  gap: 14px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.viewBar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.viewSwitch {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 10px;
+  background: #eaf0f8;
+}
+
+.viewSwitch button {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted, #64748b);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.viewSwitch button:hover:not(:disabled),
+.viewSwitch button:focus-visible {
+  border: 0;
+  box-shadow: none;
+}
+
+.viewSwitch button[aria-pressed="true"] {
+  color: var(--text, #172033);
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 12%);
+}
+
+.viewSwitch svg {
+  width: 16px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
 }
 
 .sidebar {
-  flex: 0 1 auto;
-  max-width: calc(100% - 24px);
-  padding: 5px;
-  border: 1px solid var(--surface-border, #d7e0ec);
-  border-radius: 11px;
-  background: rgb(255 255 255 / 94%);
-  box-shadow: 0 6px 20px rgb(15 23 42 / 10%);
-  backdrop-filter: blur(8px);
-  pointer-events: auto;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .contractList {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(7rem, auto));
-  gap: 6px;
+  display: flex;
+  gap: 5px;
   padding: 0;
   margin: 0;
   list-style: none;
@@ -31,12 +76,15 @@
 
 .contractList button {
   display: flex;
-  width: 100%;
-  min-height: 42px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
+  padding: 7px 11px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted, #64748b);
   text-align: center;
+  white-space: nowrap;
 }
 
 .contractList button span {
@@ -62,8 +110,13 @@
 }
 
 @media (max-width: 920px) {
-  .contractList {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .viewBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .viewSwitch {
+    align-self: flex-start;
   }
 }
 
@@ -73,7 +126,8 @@
   }
 
   .content {
-    height: 34rem;
+    height: auto;
+    min-height: 34rem;
     flex: none;
   }
 }

@@ -26,10 +26,15 @@ import {
 } from "@/src/domain/contract-module-graph";
 import type { PermissionDraft } from "@/src/domain/draft";
 import type { PermissionStudioModel } from "@/src/domain/model";
+import {
+  defaultPermissionStudioLocale,
+  type PermissionStudioLocale,
+} from "@/src/domain/model-i18n";
 
 export interface ContractModuleGraphProps {
   model: PermissionStudioModel;
   draft: PermissionDraft;
+  locale?: PermissionStudioLocale;
   contractType: string;
   disabled?: boolean;
   toolbar?: ReactNode;
@@ -47,6 +52,7 @@ function structureKey(nodes: readonly ContractModuleFlowNode[]): string {
 export function ContractModuleGraph({
   model,
   draft,
+  locale = defaultPermissionStudioLocale,
   contractType,
   disabled = false,
   toolbar,
@@ -60,8 +66,8 @@ export function ContractModuleGraph({
     [collapsedByContract, contractType],
   );
   const projection = useMemo(
-    () => buildContractModuleGraph(model, draft, contractType, { collapsed, query }),
-    [collapsed, contractType, draft, model, query],
+    () => buildContractModuleGraph(model, draft, contractType, { collapsed, query, locale }),
+    [collapsed, contractType, draft, locale, model, query],
   );
 
   const toggleNode = useCallback(

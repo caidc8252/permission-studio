@@ -73,6 +73,16 @@ function node(projection: ReturnType<typeof buildContractModuleGraph>, id: strin
 }
 
 describe("buildContractModuleGraph", () => {
+  it("uses the selected data locale for module nodes", () => {
+    const projection = buildContractModuleGraph(baseModel, createEmptyDraft(), "ISO", {
+      collapsed: new Set(),
+      query: "",
+      locale: "en",
+    });
+
+    expect(node(projection, "menu:orders").label).toBe("Orders");
+  });
+
   it("projects a contract, groups, menu hierarchy, and widgets with tri-state membership", () => {
     const projection = buildContractModuleGraph(model, createEmptyDraft(), "ISO", {
       collapsed: new Set(),
@@ -152,6 +162,20 @@ describe("buildContractModuleGraph", () => {
     expect(node(searched, "menu:orders").searchMatch).toBe(false);
     expect(searched.matchIds).toEqual(["menu:orders.history"]);
     expect(collapsed).toEqual(new Set(["orders"]));
+  });
+
+  it("matches menu paths and translated widget descriptions", () => {
+    const pathMatch = buildContractModuleGraph(model, createEmptyDraft(), "ISO", {
+      collapsed: new Set(),
+      query: "/orders/history",
+    });
+    expect(pathMatch.matchIds).toEqual(["menu:orders.history"]);
+
+    const descriptionMatch = buildContractModuleGraph(model, createEmptyDraft(), "ISO", {
+      collapsed: new Set(),
+      query: "快速打开常用页面",
+    });
+    expect(descriptionMatch.matchIds).toEqual(["widget:quick-widget"]);
   });
 
   it("collapses whole menu and widget groups while search reveals matching descendants", () => {

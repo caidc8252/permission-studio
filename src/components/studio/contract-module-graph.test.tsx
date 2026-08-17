@@ -136,6 +136,37 @@ afterEach(() => {
 });
 
 describe("ContractModuleGraph", () => {
+  it("renders module nodes in the selected data locale", () => {
+    render(
+      <ContractModuleGraph
+        model={baseModel}
+        draft={createEmptyDraft()}
+        locale="en"
+        contractType="ISO"
+        onDraftChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("checkbox", { name: "启用Orders" })).toBeVisible();
+    expect(screen.getByText("orders")).toBeVisible();
+    expect(screen.getByRole("button", { name: "全屏显示画布" })).toBeVisible();
+  });
+
+  it("renders module nodes in the selected data locale", () => {
+    render(
+      <ContractModuleGraph
+        model={baseModel}
+        draft={createEmptyDraft()}
+        contractType="ISO"
+        locale="en"
+        onDraftChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("checkbox", { name: "启用Orders" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "全屏显示画布" })).toBeVisible();
+  });
+
   it("renders the complete relationship canvas with protected topology", () => {
     render(
       <ContractModuleGraph

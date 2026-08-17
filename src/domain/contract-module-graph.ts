@@ -1,5 +1,10 @@
 import { setContractOwnerMembership, type PermissionDraft } from "@/src/domain/draft";
 import type { PermissionStudioModel } from "@/src/domain/model";
+import {
+  defaultPermissionStudioLocale,
+  translatedModelText,
+  type PermissionStudioLocale,
+} from "@/src/domain/model-i18n";
 
 export type ContractModuleGraphNodeKind = "contract" | "group" | "menu" | "widget" | "empty";
 
@@ -37,6 +42,7 @@ export interface ContractModuleGraphProjection {
 export interface ContractModuleGraphViewOptions {
   collapsed: ReadonlySet<string>;
   query: string;
+  locale?: PermissionStudioLocale;
 }
 
 export interface ContractModuleGraphToggle {
@@ -48,10 +54,6 @@ export interface ContractModuleGraphToggle {
 interface MenuTree {
   roots: string[];
   children: Map<string, string[]>;
-}
-
-function translated(model: PermissionStudioModel, key: string, fallback: string): string {
-  return model.translations["zh-CN"][key] ?? fallback;
 }
 
 function assertEditableContract(model: PermissionStudioModel, contractType: string): void {
@@ -122,13 +124,14 @@ function widgetOwners(model: PermissionStudioModel): string[] {
 function widgetCopy(
   model: PermissionStudioModel,
   owner: string,
+  locale: PermissionStudioLocale,
 ): { label: string; description: string | null } {
   const permission = Object.values(model.permissionRegistry)
     .filter((candidate) => candidate.belongToMenuCode === owner)
     .sort((left, right) => left.code.localeCompare(right.code))[0];
   return {
-    label: permission ? translated(model, permission.label, owner) : owner,
-    description: permission ? translated(model, permission.desc, owner) : null,
+    label: permission ? translatedModelText(model, locale, permission.label, owner) : owner,
+    description: permission ? translatedModelText(model, locale, permission.desc, owner) : null,
   };
 }
 
@@ -174,6 +177,7 @@ export function buildContractModuleGraph(
   const menuBaseline = new Set(model.contractMenus[contractType] ?? []);
   const widgetBaseline = new Set(model.contractWidgets[contractType] ?? []);
   const widgets = widgetOwners(model);
+  const locale = options.locale ?? defaultPermissionStudioLocale;
   const query = options.query.trim().toLocaleLowerCase();
   const isCollapsed = (id: string, legacyCode?: string) =>
     options.collapsed.has(id) || (legacyCode ? options.collapsed.has(legacyCode) : false);
@@ -181,12 +185,12 @@ export function buildContractModuleGraph(
   const matchingWidgetCodes = new Set<string>();
 
   for (const [code, menu] of Object.entries(model.menuRegistry)) {
-    const label = translated(model, menu.title, code);
-    if (matches(query, code, label)) matchingMenuCodes.add(code);
+    const label = translatedModelText(model, locale, menu.title, code);
+    if (matches(query, code, label, menu.path)) matchingMenuCodes.add(code);
   }
   for (const owner of widgets) {
-    const copy = widgetCopy(model, owner);
-    if (matches(query, owner, copy.label)) matchingWidgetCodes.add(owner);
+    const copy = widgetCopy(model, owner, locale);
+    if (matches(query, owner, copy.label, copy.description)) matchingWidgetCodes.add(owner);
   }
 
   const forcedMenus = new Set<string>();
@@ -258,7 +262,7 @@ export function buildContractModuleGraph(
     const checked = subtree.every((candidate) => menuCurrent.has(candidate));
     const anyChecked = subtree.some((candidate) => menuCurrent.has(candidate));
     const id = `menu:${code}`;
-    const label = translated(model, menu.title, code);
+    const label = translatedModelText(model, locale, menu.title, code);
     const menuNode: ContractModuleGraphNode = {
       id,
       kind: "menu",
@@ -344,7 +348,7 @@ export function buildContractModuleGraph(
   } else if (showWidgetGroup) {
     for (const owner of widgets) {
       if ((contractCollapsed || widgetGroup.collapsed) && !matchingWidgetCodes.has(owner)) continue;
-      const copy = widgetCopy(model, owner);
+      const copy = widgetCopy(model, owner, locale);
       const id = `widget:${owner}`;
       const widgetNode: ContractModuleGraphNode = {
         id,
