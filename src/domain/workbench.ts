@@ -5,6 +5,11 @@ import type {
   PermissionMembershipType,
   PermissionStudioModel,
 } from "@/src/domain/model";
+import {
+  defaultPermissionStudioLocale,
+  translatedModelText,
+  type PermissionStudioLocale,
+} from "@/src/domain/model-i18n";
 
 export interface WorkbenchScenario {
   membershipType: PermissionMembershipType;
@@ -43,10 +48,6 @@ export interface WorkbenchView {
   visibleWidgets: string[];
 }
 
-function translated(model: PermissionStudioModel, key: string, fallback: string): string {
-  return model.translations["zh-CN"][key] ?? fallback;
-}
-
 function statusFor(decision: PermissionDecision): WorkbenchPermissionStatus {
   if (decision.effective) return "effective";
   if (decision.blockedByPlan) return "plan-blocked";
@@ -66,9 +67,38 @@ function menuDepth(model: PermissionStudioModel, menuCode: string): number {
   return depth;
 }
 
+function sortMenusInTreeOrder(menus: readonly WorkbenchMenu[]): WorkbenchMenu[] {
+  const menuCodes = new Set(menus.map((menu) => menu.menuCode));
+  const children = new Map<string | null, WorkbenchMenu[]>();
+  const compareMenus = (left: WorkbenchMenu, right: WorkbenchMenu) =>
+    left.order - right.order || left.menuCode.localeCompare(right.menuCode);
+
+  for (const menu of menus) {
+    const parent = menu.parentMenuCode && menuCodes.has(menu.parentMenuCode)
+      ? menu.parentMenuCode
+      : null;
+    children.set(parent, [...(children.get(parent) ?? []), menu]);
+  }
+  for (const siblings of children.values()) siblings.sort(compareMenus);
+
+  const ordered: WorkbenchMenu[] = [];
+  const visited = new Set<string>();
+  const appendMenu = (menu: WorkbenchMenu) => {
+    if (visited.has(menu.menuCode)) return;
+    visited.add(menu.menuCode);
+    ordered.push(menu);
+    for (const child of children.get(menu.menuCode) ?? []) appendMenu(child);
+  };
+
+  for (const root of children.get(null) ?? []) appendMenu(root);
+  for (const menu of [...menus].sort(compareMenus)) appendMenu(menu);
+  return ordered;
+}
+
 export function buildWorkbenchView(
   model: PermissionStudioModel,
   scenario: WorkbenchScenario,
+  locale: PermissionStudioLocale = defaultPermissionStudioLocale,
 ): WorkbenchView {
   const result = explainEffectivePermissions({
     permissionCodes: model.permissionCodes,
@@ -118,11 +148,11 @@ export function buildWorkbenchView(
         const owner = model.menuRegistry[entry.belongToMenuCode];
         return {
           code,
-          label: translated(model, entry.label, code),
-          description: translated(model, entry.desc, entry.desc || code),
+          label: translatedModelText(model, locale, entry.label, code),
+          description: translatedModelText(model, locale, entry.desc, entry.desc || code),
           ownerCode: entry.belongToMenuCode,
           ownerLabel: owner
-            ? translated(model, owner.title, owner.menuCode)
+            ? translatedModelText(model, locale, owner.title, owner.menuCode)
             : entry.belongToMenuCode,
           status: statusFor(decision),
           decision,
@@ -130,19 +160,18 @@ export function buildWorkbenchView(
       })
       .filter((item): item is WorkbenchPermission => item !== null)
       .sort((left, right) => left.code.localeCompare(right.code)),
-    visibleMenus: Object.values(model.menuRegistry)
-      .filter((menu) => visibleMenuCodes.has(menu.menuCode))
-      .map((menu) => ({
-        menuCode: menu.menuCode,
-        title: translated(model, menu.title, menu.menuCode),
-        parentMenuCode: menu.parentMenuCode,
-        path: menu.path,
-        order: menu.order,
-        depth: menuDepth(model, menu.menuCode),
-      }))
-      .sort(
-        (left, right) => left.order - right.order || left.menuCode.localeCompare(right.menuCode),
-      ),
+    visibleMenus: sortMenusInTreeOrder(
+      Object.values(model.menuRegistry)
+        .filter((menu) => visibleMenuCodes.has(menu.menuCode))
+        .map((menu) => ({
+          menuCode: menu.menuCode,
+          title: translatedModelText(model, locale, menu.title, menu.menuCode),
+          parentMenuCode: menu.parentMenuCode,
+          path: menu.path,
+          order: menu.order,
+          depth: menuDepth(model, menu.menuCode),
+        })),
+    ),
     visibleWidgets,
   };
 }

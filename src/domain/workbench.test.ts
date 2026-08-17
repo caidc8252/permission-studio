@@ -40,6 +40,25 @@ describe("buildWorkbenchView", () => {
     expect(model).toEqual(validModel);
   });
 
+  it("uses the selected data locale for permission and module copy", () => {
+    const view = buildWorkbenchView(
+      model,
+      {
+        membershipType: "MEMBER",
+        entitlements: [{ contractType: "ISO", plan: "STANDARD" }],
+        roleCodes: ["preset_ops"],
+      },
+      "ja",
+    );
+
+    expect(view.permissions.find((item) => item.code === "orders.view")).toMatchObject({
+      label: "注文を表示",
+      description: "注文レコードを表示します。",
+      ownerLabel: "注文",
+    });
+    expect(view.visibleMenus[0]?.title).toBe("注文");
+  });
+
   it("projects final modules from effective permissions instead of contracts alone", () => {
     const memberWithoutRoles = buildWorkbenchView(model, {
       membershipType: "MEMBER",
@@ -65,7 +84,7 @@ describe("buildWorkbenchView", () => {
       parentMenuCode: null,
       path: "/",
       icon: null,
-      order: 1,
+      order: 999,
     };
     nested.menuRegistry.orders.parentMenuCode = "root";
 
