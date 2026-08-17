@@ -609,31 +609,6 @@ export function PermissionSimulator({
         </section>
       </div>
 
-      <footer className={styles.scenarioBar}>
-        <div>
-          <span>当前模拟</span>
-          <strong>{membershipType === "MEMBER" ? "普通成员" : "平台管理员"}</strong>
-          {entitlements.map((item) => (
-            <span key={item.contractType}>
-              {item.contractType}
-              {item.plan ? ` / ${item.plan}` : ""}
-            </span>
-          ))}
-          {selectedRoles.map((role) => (
-            <span key={role.code}>
-              {translatedModelText(previewModel, locale, role.roleName, role.code)}
-            </span>
-          ))}
-        </div>
-        {permissionDelta || menuDelta ? (
-          <p>
-            本次组合 <strong>{signedCount(permissionDelta)} 权限</strong>
-            <strong>{signedCount(menuDelta)} 菜单</strong>
-          </p>
-        ) : (
-          <p>初始组合</p>
-        )}
-      </footer>
     </section>
   );
 }

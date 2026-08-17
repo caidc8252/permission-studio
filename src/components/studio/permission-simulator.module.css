@@ -13,7 +13,6 @@
 
 .conditionsHeading,
 .resultsHeading,
-.scenarioBar,
 .menuTreeHeading {
   display: flex;
   align-items: center;
@@ -23,8 +22,7 @@
 
 .conditionsHeading h3,
 .resultsHeading h3,
-.resultsHeading p,
-.scenarioBar p {
+.resultsHeading p {
   margin: 0;
 }
 
@@ -834,52 +832,6 @@
   font-size: 0.65rem;
 }
 
-.scenarioBar {
-  min-width: 0;
-  padding: 11px 14px;
-  color: var(--muted);
-  border: 1px solid var(--surface-border);
-  border-radius: 11px;
-  background: var(--surface);
-  font-size: 0.7rem;
-}
-
-.scenarioBar > div {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.scenarioBar > div > span,
-.scenarioBar > div > strong {
-  padding: 4px 7px;
-  border-radius: 5px;
-  background: var(--surface-subtle);
-}
-
-.scenarioBar > div > span:first-child {
-  padding-left: 0;
-  background: transparent;
-  font-weight: 700;
-}
-
-.scenarioBar > div > strong {
-  color: var(--simulator-blue);
-  background: var(--simulator-blue-soft);
-}
-
-.scenarioBar p {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-}
-
-.scenarioBar p strong {
-  color: var(--simulator-green);
-}
-
 .visuallyHidden {
   position: absolute;
   width: 1px;
@@ -923,8 +875,7 @@
 }
 
 @media (max-width: 640px) {
-  .resultsHeading,
-  .scenarioBar {
+  .resultsHeading {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -983,9 +934,6 @@
     display: none;
   }
 
-  .scenarioBar p {
-    flex-wrap: wrap;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
