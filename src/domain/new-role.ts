@@ -4,6 +4,7 @@ export interface NewRoleDraft {
   roleId: number;
   code: string;
   names: NewRoleNames;
+  descriptions?: NewRoleDescriptions;
   permissionCodes: string[];
 }
 
@@ -13,14 +14,26 @@ export interface NewRoleNames {
   ja: string;
 }
 
+export type NewRoleDescriptions = NewRoleNames;
+
 export interface NewRoleInput {
   roleId: number;
   code: string;
   names: NewRoleNames;
+  descriptions?: NewRoleDescriptions;
   permissionCodes: readonly string[];
 }
 
-export type NewRoleField = "roleId" | "code" | "nameEn" | "nameZhCn" | "nameJa" | "permissionCodes";
+export type NewRoleField =
+  | "roleId"
+  | "code"
+  | "nameEn"
+  | "nameZhCn"
+  | "nameJa"
+  | "descriptionEn"
+  | "descriptionZhCn"
+  | "descriptionJa"
+  | "permissionCodes";
 export type NewRoleValidationErrors = Partial<Record<NewRoleField, string>>;
 
 const CODE_PATTERN = /^preset_[a-z0-9_]+$/;
@@ -49,6 +62,29 @@ export function roleI18nStem(roleCode: string): string {
   return roleCode.replace(/_(.)/gu, (_, character: string) => character.toUpperCase());
 }
 
+export function validateRoleCode(
+  model: PermissionStudioModel,
+  code: string,
+  options: {
+    excludeModelCode?: string;
+    occupiedCodes?: readonly string[];
+  } = {},
+): string | undefined {
+  const trimmed = code.trim();
+  const normalizedCode = normalizedText(trimmed);
+  if (!CODE_PATTERN.test(trimmed)) {
+    return "角色编码必须以 preset_ 开头，且只能包含小写字母、数字和下划线";
+  }
+  const isOccupied = model.roles.some(
+    (role) =>
+      role.code !== options.excludeModelCode && normalizedText(role.code) === normalizedCode,
+  );
+  const isDraftOccupied = (options.occupiedCodes ?? []).some(
+    (candidate) => normalizedText(candidate) === normalizedCode,
+  );
+  return isOccupied || isDraftOccupied ? "角色编码已存在" : undefined;
+}
+
 export function validateNewRole(
   model: PermissionStudioModel,
   otherNewRoles: readonly NewRoleDraft[],
@@ -56,7 +92,6 @@ export function validateNewRole(
 ): NewRoleValidationErrors {
   const errors: NewRoleValidationErrors = {};
   const code = input.code.trim();
-  const normalizedCode = normalizedText(code);
 
   if (!Number.isInteger(input.roleId) || input.roleId < 1 || input.roleId >= 1000) {
     errors.roleId = "角色 ID 必须是 1–999 的整数";
@@ -67,14 +102,10 @@ export function validateNewRole(
     errors.roleId = "角色 ID 已存在";
   }
 
-  if (!CODE_PATTERN.test(code)) {
-    errors.code = "角色编码必须以 preset_ 开头，且只能包含小写字母、数字和下划线";
-  } else if (
-    model.roles.some((role) => normalizedText(role.code) === normalizedCode) ||
-    otherNewRoles.some((role) => normalizedText(role.code) === normalizedCode)
-  ) {
-    errors.code = "角色编码已存在";
-  }
+  const codeError = validateRoleCode(model, code, {
+    occupiedCodes: otherNewRoles.map((role) => role.code),
+  });
+  if (codeError) errors.code = codeError;
 
   const locales = [
     { locale: "zh-CN", field: "nameZhCn", label: "中文名称" },
@@ -91,6 +122,20 @@ export function validateNewRole(
       otherNewRoles.some((role) => normalizedText(role.names[locale]) === normalizedName)
     ) {
       errors[field] = `${label}已存在`;
+    }
+  }
+
+  if (input.descriptions) {
+    const descriptionFields = [
+      { locale: "zh-CN", field: "descriptionZhCn", label: "中文描述" },
+      { locale: "en", field: "descriptionEn", label: "英文描述" },
+      { locale: "ja", field: "descriptionJa", label: "日文描述" },
+    ] as const;
+    for (const { locale, field, label } of descriptionFields) {
+      const description = input.descriptions[locale].trim();
+      if (!description || description.length > 500 || hasControlCharacter(description)) {
+        errors[field] = `${label}不能为空，且不能超过 500 个字符`;
+      }
     }
   }
 
@@ -118,6 +163,15 @@ export function normalizeNewRole(
       "zh-CN": input.names["zh-CN"].trim(),
       ja: input.names.ja.trim(),
     },
+    ...(input.descriptions
+      ? {
+          descriptions: {
+            en: input.descriptions.en.trim(),
+            "zh-CN": input.descriptions["zh-CN"].trim(),
+            ja: input.descriptions.ja.trim(),
+          },
+        }
+      : {}),
     permissionCodes: [...new Set(input.permissionCodes)].sort(),
   };
 }

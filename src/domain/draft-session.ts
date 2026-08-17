@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import {
   createEmptyDraft,
+  deleteRole,
+  renameExistingRole,
   setContractOwnerMembership,
   setRolePermissionMembership,
   type PermissionDraft,
@@ -20,11 +22,17 @@ const roleNamesSchema = z.strictObject({
   "zh-CN": z.string().min(1).max(100),
   ja: z.string().min(1).max(100),
 });
+const roleDescriptionsSchema = z.strictObject({
+  en: z.string().min(1).max(500),
+  "zh-CN": z.string().min(1).max(500),
+  ja: z.string().min(1).max(500),
+});
 const newRoleSchema = z.union([
   z.strictObject({
     roleId: z.number().int().min(1).max(999),
     code: editableRoleCodeSchema,
     names: roleNamesSchema,
+    descriptions: roleDescriptionsSchema.optional(),
     permissionCodes: identifierArraySchema,
   }),
   z
@@ -41,6 +49,8 @@ const newRoleSchema = z.union([
 ]);
 const draftSchema = z.strictObject({
   newRoles: z.array(newRoleSchema).max(50).default([]),
+  deletedRoleCodes: z.array(editableRoleCodeSchema).max(50).optional(),
+  roleRenames: z.record(editableRoleCodeSchema, editableRoleCodeSchema).default({}),
   rolePermissions: z.record(editableRoleCodeSchema, identifierArraySchema),
   contractMenus: z.record(editableContractTypeSchema, identifierArraySchema),
   contractWidgets: z.record(editableContractTypeSchema, identifierArraySchema),
@@ -162,7 +172,16 @@ export function rebasePermissionDraft(
       return false;
     });
     const errors = validateNewRole(newModel, rebased.newRoles, { ...role, permissionCodes });
-    if (errors.roleId || errors.code || errors.nameEn || errors.nameZhCn || errors.nameJa) {
+    if (
+      errors.roleId ||
+      errors.code ||
+      errors.nameEn ||
+      errors.nameZhCn ||
+      errors.nameJa ||
+      errors.descriptionEn ||
+      errors.descriptionZhCn ||
+      errors.descriptionJa
+    ) {
       conflicts.push({ kind: "role", ownerCode: role.code, code: role.code });
       continue;
     }
@@ -172,7 +191,32 @@ export function rebasePermissionDraft(
     };
   }
 
+  for (const roleCode of [...(draft.deletedRoleCodes ?? [])].sort()) {
+    if (!isEditableRole(oldModel, roleCode)) {
+      conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
+      continue;
+    }
+    if (!isEditableRole(newModel, roleCode)) continue;
+    rebased = deleteRole(rebased, newModel, roleCode);
+  }
+
+  for (const [roleCode, newRoleCode] of Object.entries(draft.roleRenames ?? {}).sort(
+    ([left], [right]) => left.localeCompare(right),
+  )) {
+    if ((draft.deletedRoleCodes ?? []).includes(roleCode)) continue;
+    if (!isEditableRole(oldModel, roleCode) || !isEditableRole(newModel, roleCode)) {
+      conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
+      continue;
+    }
+    try {
+      rebased = renameExistingRole(rebased, newModel, roleCode, newRoleCode);
+    } catch {
+      conflicts.push({ kind: "role", ownerCode: roleCode, code: newRoleCode });
+    }
+  }
+
   for (const [roleCode, oldMembership] of sortedEntries(draft.rolePermissions)) {
+    if ((draft.deletedRoleCodes ?? []).includes(roleCode)) continue;
     const oldRole = oldModel.roles.find((role) => role.code === roleCode);
     if (!oldRole || !isEditableRole(newModel, roleCode)) {
       conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });

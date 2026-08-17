@@ -142,4 +142,42 @@ describe("POST /api/changes/prepare", () => {
       ).toBe(400);
     }
   });
+
+  it("accepts a unique existing-role code rename and rejects a new-role collision", async () => {
+    const { handler } = setup();
+    const renamedRole = {
+      roleCode: "preset_ops",
+      newRoleCode: "preset_operations",
+      add: [],
+      remove: [],
+    };
+    expect((await handler(request({ ...intent, roleChanges: [renamedRole] }))).status).toBe(202);
+
+    const newRole = {
+      roleId: 99,
+      code: "preset_operations",
+      names: { en: "Operations", "zh-CN": "运营管理", ja: "運用管理" },
+      permissionCodes: [],
+    };
+    expect(
+      (await handler(request({ ...intent, newRoles: [newRole], roleChanges: [renamedRole] })))
+        .status,
+    ).toBe(400);
+  });
+
+  it("accepts deletion of an existing preset role and rejects unknown roles", async () => {
+    const { handler, prepareChange } = setup();
+
+    expect(
+      (await handler(request({ ...intent, deletedRoleCodes: ["preset_ops"], roleChanges: [] })))
+        .status,
+    ).toBe(202);
+    expect(prepareChange).toHaveBeenCalledWith(
+      expect.objectContaining({ deletedRoleCodes: ["preset_ops"] }),
+    );
+    expect(
+      (await handler(request({ ...intent, deletedRoleCodes: ["preset_missing"], roleChanges: [] })))
+        .status,
+    ).toBe(400);
+  });
 });

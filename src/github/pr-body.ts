@@ -24,16 +24,20 @@ function values(items: readonly string[]): string {
 
 export function buildPullRequestBody(input: PullRequestBodyInput): string {
   const newRoleRows = input.change.newRoles.length
-    ? input.change.newRoles.map(
-        (role) =>
-          `| ${role.roleId} | \`${cell(role.code)}\` | ${cell(role.names["zh-CN"])} | ${cell(role.names.en)} | ${cell(role.names.ja)} | ${values(role.permissionCodes)} |`,
-      )
-    : ["| — | — | — | — | — | — |"];
+    ? input.change.newRoles.map((role) => {
+        const descriptions = role.descriptions ?? role.names;
+        return `| ${role.roleId} | \`${cell(role.code)}\` | ${cell(role.names["zh-CN"])} | ${cell(role.names.en)} | ${cell(role.names.ja)} | ${cell(descriptions["zh-CN"])}<br>${cell(descriptions.en)}<br>${cell(descriptions.ja)} | ${values(role.permissionCodes)} |`;
+      })
+    : ["| — | — | — | — | — | — | — |"];
   const roleRows = input.change.roleChanges.length
     ? input.change.roleChanges.map(
-        (role) => `| \`${cell(role.roleCode)}\` | ${values(role.add)} | ${values(role.remove)} |`,
+        (role) =>
+          `| \`${cell(role.roleCode)}\` | ${role.newRoleCode ? `\`${cell(role.newRoleCode)}\`` : "—"} | ${values(role.add)} | ${values(role.remove)} |`,
       )
-    : ["| — | — | — |"];
+    : ["| — | — | — | — |"];
+  const deletedRoleRows = input.change.deletedRoleCodes?.length
+    ? input.change.deletedRoleCodes.map((roleCode) => `| \`${cell(roleCode)}\` |`)
+    : ["| — |"];
   const contractRows = input.change.contractChanges.length
     ? input.change.contractChanges.flatMap((contract) => [
         `| \`${cell(contract.contractType)}\` | menu | ${values(contract.menus.add)} | ${values(contract.menus.remove)} |`,
@@ -55,14 +59,20 @@ export function buildPullRequestBody(input: PullRequestBodyInput): string {
     "",
     "### New roles",
     "",
-    "| ID | Code | 中文名称 | English name | 日本語名 | Initial permissions |",
-    "| --- | --- | --- | --- | --- | --- |",
+    "| ID | Code | 中文名称 | English name | 日本語名 | 描述（中 / EN / 日） | Initial permissions |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
     ...newRoleRows,
+    "",
+    "### Deleted roles",
+    "",
+    "| Role code |",
+    "| --- |",
+    ...deletedRoleRows,
     "",
     "### Role permissions",
     "",
-    "| Role | Add | Remove |",
-    "| --- | --- | --- |",
+    "| Role | New code | Add | Remove |",
+    "| --- | --- | --- | --- |",
     ...roleRows,
     "",
     "### Contract modules",

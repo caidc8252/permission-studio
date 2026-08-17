@@ -1,12 +1,15 @@
-import { readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import process from "node:process";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
   applySourceEdits,
   planNewRoleEdit,
+  planRoleCodeEdit,
+  planRoleDeletionEdit,
   planRoleTranslationEdit,
+  planRoleTranslationDeletionEdit,
   planSourceEdits,
 } from "./source-editor.mjs";
 
@@ -17,6 +20,61 @@ export const ALLOWED_CATALOG_PATHS = Object.freeze([
   "apps/web/manifest/catalog/i18n/zh-CN.ts",
   "apps/web/manifest/catalog/i18n/ja.ts",
 ]);
+
+const SCANNED_EXTENSIONS = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".jsonc",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".sql",
+]);
+const SKIPPED_DIRECTORIES = new Set([".git", ".next", "coverage", "dist", "node_modules"]);
+
+function containsToken(source, token) {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(?:^|[^A-Za-z0-9_.-])${escaped}(?=$|[^A-Za-z0-9_.-])`, "mu").test(
+    source,
+  );
+}
+
+async function findRoleReferences(root, roleCodes) {
+  const tokens = new Map(
+    roleCodes.map((roleCode) => {
+      const stem = roleCode.replace(/_(.)/gu, (_, character) => character.toUpperCase());
+      return [roleCode, [roleCode, `role.${stem}`, `role.${stem}Desc`]];
+    }),
+  );
+  const references = [];
+  const visit = async (directory) => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (!SKIPPED_DIRECTORIES.has(entry.name) && !entry.name.startsWith(".")) {
+          await visit(join(directory, entry.name));
+        }
+        continue;
+      }
+      if (!entry.isFile() || !SCANNED_EXTENSIONS.has(extname(entry.name))) continue;
+      const path = join(directory, entry.name);
+      const relativePath = relative(root, path).replaceAll("\\", "/");
+      if (ALLOWED_CATALOG_PATHS.includes(relativePath)) continue;
+      const source = await readFile(path, "utf8");
+      for (const [roleCode, roleTokens] of tokens) {
+        if (roleTokens.some((token) => containsToken(source, token))) {
+          references.push({ roleCode, relativePath });
+        }
+      }
+    }
+  };
+  await visit(root);
+  return references;
+}
 
 async function atomicWrite(files) {
   const staged = [];
@@ -48,6 +106,17 @@ function applyRequest(source, request) {
 
 export async function applyPermissionChange(worktreePath, change) {
   const root = resolve(worktreePath);
+  const deletedRoleCodes = [...new Set(change.deletedRoleCodes ?? [])].sort();
+  if (deletedRoleCodes.length) {
+    const references = await findRoleReferences(root, deletedRoleCodes);
+    if (references.length) {
+      const summary = references
+        .slice(0, 8)
+        .map(({ roleCode, relativePath }) => `${roleCode}: ${relativePath}`)
+        .join(", ");
+      throw new Error(`Role deletion is blocked by external references: ${summary}`);
+    }
+  }
   const rolesPath = join(root, ...ALLOWED_CATALOG_PATHS[0].split("/"));
   const contractsPath = join(root, ...ALLOWED_CATALOG_PATHS[1].split("/"));
   const translationPaths = ALLOWED_CATALOG_PATHS.slice(2).map((path) =>
@@ -69,8 +138,21 @@ export async function applyPermissionChange(worktreePath, change) {
     for (const [index, source] of translations.entries()) {
       translations[index] = applySourceEdits(
         source,
-        planRoleTranslationEdit(source, stem, role.names[locales[index]]),
+        planRoleTranslationEdit(
+          source,
+          stem,
+          role.names[locales[index]],
+          role.descriptions?.[locales[index]] ?? role.names[locales[index]],
+        ),
       );
+    }
+  }
+
+  for (const roleCode of deletedRoleCodes) {
+    roles = applySourceEdits(roles, planRoleDeletionEdit(roles, roleCode));
+    const stem = roleCode.replace(/_(.)/gu, (_, character) => character.toUpperCase());
+    for (const [index, source] of translations.entries()) {
+      translations[index] = applySourceEdits(source, planRoleTranslationDeletionEdit(source, stem));
     }
   }
 
@@ -78,10 +160,14 @@ export async function applyPermissionChange(worktreePath, change) {
     roles = applyRequest(roles, {
       owner: "GLOBAL_ROLES",
       key: role.roleCode,
+      fallbackKey: role.newRoleCode,
       field: "permissionCodes",
       add: role.add,
       remove: role.remove,
     });
+    if (role.newRoleCode) {
+      roles = applySourceEdits(roles, planRoleCodeEdit(roles, role.roleCode, role.newRoleCode));
+    }
   }
   for (const contract of change.contractChanges ?? []) {
     if (contract.menus.add.length || contract.menus.remove.length) {

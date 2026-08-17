@@ -6,11 +6,14 @@ import {
   buildImpactDiff,
   buildPermissionChange,
   createEmptyDraft,
+  deleteRole,
   discardContractDraft,
   discardDraftItem,
   discardRoleDraft,
+  renameExistingRole,
   setContractOwnerMembership,
   setRolePermissionMembership,
+  updateNewRole,
   toggleContractOwner,
   toggleRolePermission,
 } from "@/src/domain/draft";
@@ -81,6 +84,54 @@ describe("permission drafts", () => {
     expect(baseline.rolePermissions).toEqual({});
   });
 
+  it("renames an existing role while preserving its permissions and protocol identity", () => {
+    const renamed = renameExistingRole(
+      createEmptyDraft(),
+      model,
+      "preset_ops",
+      "preset_operations",
+    );
+    const changed = setRolePermissionMembership(renamed, model, "preset_ops", [
+      "orders.manage",
+      "orders.view",
+    ]);
+    const projected = applyDraftToModel(model, changed);
+    const impact = buildImpactDiff(model, changed);
+    const change = buildPermissionChange(model, changed, {
+      requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
+      title: "chore(permissions): rename operations role",
+      reason: "统一运营角色编码并保留现有权限配置",
+    });
+
+    expect(projected.roles.find((role) => role.code === "preset_operations")).toMatchObject({
+      roleId: model.roles[0]!.roleId,
+      permissionCodes: ["orders.manage", "orders.view"],
+    });
+    expect(projected.roles.some((role) => role.code === "preset_ops")).toBe(false);
+    expect(impact.renamedRoles).toEqual([{ oldCode: "preset_ops", newCode: "preset_operations" }]);
+    expect(change.roleChanges).toEqual([
+      {
+        roleCode: "preset_ops",
+        newRoleCode: "preset_operations",
+        add: ["orders.manage"],
+        remove: [],
+      },
+    ]);
+  });
+
+  it("rejects a renamed role code occupied by a new draft role", () => {
+    const draft = addNewRole(createEmptyDraft(), model, {
+      roleId: 99,
+      code: "preset_auditor",
+      names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+      permissionCodes: [],
+    });
+
+    expect(() => renameExistingRole(draft, model, "preset_ops", "preset_auditor")).toThrow(
+      "角色编码已存在",
+    );
+  });
+
   it("adds a role with initial permissions and includes it in the change protocol", () => {
     const draft = addNewRole(createEmptyDraft(), model, {
       roleId: 99,
@@ -117,6 +168,70 @@ describe("permission drafts", () => {
         permissionCodes: ["orders.view"],
       },
     ]);
+  });
+
+  it("updates a draft-created role while excluding itself from duplicate checks", () => {
+    const draft = addNewRole(createEmptyDraft(), model, {
+      roleId: 99,
+      code: "preset_auditor",
+      names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+      permissionCodes: ["orders.view"],
+    });
+
+    const updated = updateNewRole(draft, model, "preset_auditor", {
+      roleId: 98,
+      code: "preset_reviewer",
+      names: { en: "Reviewer", "zh-CN": "复核员", ja: "レビュー担当者" },
+      permissionCodes: ["orders.manage"],
+    });
+
+    expect(updated.newRoles).toEqual([
+      {
+        roleId: 98,
+        code: "preset_reviewer",
+        names: { en: "Reviewer", "zh-CN": "复核员", ja: "レビュー担当者" },
+        permissionCodes: ["orders.manage"],
+      },
+    ]);
+  });
+
+  it("deletes an existing role while clearing its other changes", () => {
+    const renamed = renameExistingRole(
+      createEmptyDraft(),
+      model,
+      "preset_ops",
+      "preset_operations",
+    );
+    const changed = setRolePermissionMembership(renamed, model, "preset_ops", ["orders.manage"]);
+    const deleted = deleteRole(changed, model, "preset_ops");
+    const impact = buildImpactDiff(model, deleted);
+    const change = buildPermissionChange(model, deleted, {
+      requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
+      title: "chore(permissions): delete operations role",
+      reason: "删除已停用的运营角色及其多语言资源",
+    });
+
+    expect(applyDraftToModel(model, deleted).roles).toEqual([]);
+    expect(deleted).toMatchObject({
+      deletedRoleCodes: ["preset_ops"],
+      roleRenames: {},
+      rolePermissions: {},
+    });
+    expect(impact.deletedRoleCodes).toEqual(["preset_ops"]);
+    expect(change.deletedRoleCodes).toEqual(["preset_ops"]);
+    expect(change.roleChanges).toEqual([]);
+    expect(discardRoleDraft(deleted, "preset_ops")).toEqual(createEmptyDraft());
+  });
+
+  it("removes a draft-created role instead of creating a deletion change", () => {
+    const added = addNewRole(createEmptyDraft(), model, {
+      roleId: 99,
+      code: "preset_auditor",
+      names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+      permissionCodes: [],
+    });
+
+    expect(deleteRole(added, model, "preset_auditor")).toEqual(createEmptyDraft());
   });
 
   it("sets a contract owner batch deterministically and removes empty overrides", () => {

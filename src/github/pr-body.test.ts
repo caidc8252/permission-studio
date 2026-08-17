@@ -64,6 +64,11 @@ describe("buildPullRequestBody", () => {
             roleId: 99,
             code: "preset_auditor",
             names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+            descriptions: {
+              en: "Reviews audit records",
+              "zh-CN": "查看审计记录",
+              ja: "監査記録を確認します",
+            },
             permissionCodes: ["orders.view"],
           },
         ],
@@ -74,7 +79,19 @@ describe("buildPullRequestBody", () => {
     });
 
     expect(body).toContain(
-      "| 99 | `preset_auditor` | 审计员 | Auditor | 監査担当者 | `orders.view` |",
+      "| 99 | `preset_auditor` | 审计员 | Auditor | 監査担当者 | 查看审计记录<br>Reviews audit records<br>監査記録を確認します | `orders.view` |",
     );
+  });
+
+  it("lists deleted roles separately", () => {
+    const body = buildPullRequestBody({
+      change: { ...change, deletedRoleCodes: ["preset_support"] },
+      actor: "operator",
+      touchedFiles: ["apps/web/manifest/catalog/roles.ts"],
+      validationSteps: [],
+    });
+
+    expect(body).toContain("### Deleted roles");
+    expect(body).toContain("| `preset_support` |");
   });
 });

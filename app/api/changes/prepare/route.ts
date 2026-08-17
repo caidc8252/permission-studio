@@ -31,12 +31,26 @@ const prepareIntentSchema = z.strictObject({
           "zh-CN": z.string().min(1).max(100),
           ja: z.string().min(1).max(100),
         }),
+        descriptions: z
+          .strictObject({
+            en: z.string().min(1).max(500),
+            "zh-CN": z.string().min(1).max(500),
+            ja: z.string().min(1).max(500),
+          })
+          .optional(),
         permissionCodes: z.array(z.string().min(1).max(200)).max(2_000),
       }),
     )
     .max(50),
+  deletedRoleCodes: z.array(z.string().min(1).max(200)).max(50).optional(),
   roleChanges: z
-    .array(z.strictObject({ roleCode: z.string().min(1).max(200), ...listChangeSchema.shape }))
+    .array(
+      z.strictObject({
+        roleCode: z.string().min(1).max(200),
+        newRoleCode: z.string().min(1).max(200).optional(),
+        ...listChangeSchema.shape,
+      }),
+    )
     .max(50),
   contractChanges: z
     .array(
@@ -76,8 +90,20 @@ function validateReferences(model: PermissionStudioModel, change: PermissionChan
   for (const role of change.newRoles) {
     acceptedNewRoles.push(normalizeNewRole(model, acceptedNewRoles, role));
   }
+  for (const roleCode of change.deletedRoleCodes ?? []) {
+    if (!roles.has(roleCode)) throw new Error("unknown deleted role");
+  }
   for (const role of change.roleChanges) {
     if (!roles.has(role.roleCode)) throw new Error("unknown role");
+    if (
+      role.newRoleCode &&
+      (roles.has(role.newRoleCode) ||
+        acceptedNewRoles.some(
+          (newRole) => newRole.code.toLocaleLowerCase() === role.newRoleCode?.toLocaleLowerCase(),
+        ))
+    ) {
+      throw new Error("duplicate renamed role");
+    }
     if ([...role.add, ...role.remove].some((code) => !permissions.has(code))) {
       throw new Error("unknown permission");
     }

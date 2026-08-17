@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createEmptyDraft, setRolePermissionMembership } from "@/src/domain/draft";
+import { createEmptyDraft, deleteRole, setRolePermissionMembership } from "@/src/domain/draft";
 import {
   draftStorageKey,
   rebasePermissionDraft,
@@ -138,10 +138,28 @@ describe("draft sessions", () => {
     expect(rebasePermissionDraft(oldModel, nextModel, draft)).toEqual({
       draft: {
         newRoles: [],
+        roleRenames: {},
         rolePermissions: { preset_ops: [] },
         contractMenus: {},
         contractWidgets: {},
       },
+      conflicts: [],
+    });
+  });
+
+  it("replays an existing-role deletion and drops it when already merged upstream", () => {
+    const draft = deleteRole(createEmptyDraft(), model, "preset_ops");
+    const nextModel = structuredClone(model);
+    nextModel.sourceSha = "f".repeat(40);
+
+    expect(rebasePermissionDraft(model, nextModel, draft)).toEqual({
+      draft,
+      conflicts: [],
+    });
+
+    nextModel.roles = [];
+    expect(rebasePermissionDraft(model, nextModel, draft)).toEqual({
+      draft: createEmptyDraft(),
       conflicts: [],
     });
   });

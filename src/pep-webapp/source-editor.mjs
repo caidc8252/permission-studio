@@ -132,6 +132,7 @@ function findTargetArray(declarations, request) {
   if (request.owner === "GLOBAL_ROLES") {
     const roles = requiredDeclaration(declarations, request.owner, "ArrayExpression");
     let selected;
+    let fallback;
     const roleCodes = new Set();
     for (const element of roles.elements) {
       const role = unwrap(element);
@@ -143,7 +144,12 @@ function findTargetArray(declarations, request) {
       if (roleCodes.has(code)) throw new Error(`Duplicate role code ${code}`);
       roleCodes.add(code);
       if (code === request.key) selected = role;
+      if (request.fallbackKey && code === request.fallbackKey) fallback = role;
     }
+    if (selected && fallback) {
+      throw new Error(`Both catalog keys ${request.key} and ${request.fallbackKey} were found`);
+    }
+    selected ??= fallback;
     if (!selected) throw new Error(`Catalog key ${request.key} was not found`);
     const field = request.field ?? "permissionCodes";
     const property = findObjectProperty(selected, field);
@@ -327,12 +333,75 @@ export function planNewRoleEdit(source, role) {
   return [{ start: closingLineStart, end: closingLineStart, text: `${text},${newline}` }];
 }
 
-export function planRoleTranslationEdit(source, stem, name) {
+export function planRoleCodeEdit(source, oldCode, newCode) {
+  if (!/^preset_[a-z0-9_]+$/u.test(oldCode) || !/^preset_[a-z0-9_]+$/u.test(newCode)) {
+    throw new Error("Role codes must be lowercase preset_ identifiers");
+  }
+  const declarations = parseCatalog(source);
+  const roles = requiredDeclaration(declarations, "GLOBAL_ROLES", "ArrayExpression");
+  let selectedCodeProperty;
+  let targetExists = false;
+  const roleCodes = new Set();
+  for (const element of roles.elements) {
+    const role = unwrap(element);
+    if (!role || role.type !== "ObjectExpression") {
+      throw new Error("GLOBAL_ROLES entries must be static objects");
+    }
+    const codeProperty = findObjectProperty(role, "code");
+    const code = stringValue(codeProperty.value, "Role code");
+    if (roleCodes.has(code)) throw new Error(`Duplicate role code ${code}`);
+    roleCodes.add(code);
+    if (code === oldCode) selectedCodeProperty = codeProperty;
+    if (code === newCode) targetExists = true;
+  }
+  if (oldCode === newCode) {
+    if (!selectedCodeProperty) throw new Error(`Catalog key ${oldCode} was not found`);
+    return [];
+  }
+  if (!selectedCodeProperty) {
+    if (targetExists) return [];
+    throw new Error(`Catalog key ${oldCode} was not found`);
+  }
+  if (targetExists) throw new Error(`Duplicate role code ${newCode}`);
+  return [
+    {
+      start: selectedCodeProperty.value.start,
+      end: selectedCodeProperty.value.end,
+      text: JSON.stringify(newCode),
+    },
+  ];
+}
+
+export function planRoleDeletionEdit(source, roleCode) {
+  if (!/^preset_[a-z0-9_]+$/u.test(roleCode)) {
+    throw new Error("Role code must be a lowercase preset_ identifier");
+  }
+  const declarations = parseCatalog(source);
+  const roles = requiredDeclaration(declarations, "GLOBAL_ROLES", "ArrayExpression");
+  let selected;
+  const roleCodes = new Set();
+  for (const element of roles.elements) {
+    const role = unwrap(element);
+    if (!role || role.type !== "ObjectExpression") {
+      throw new Error("GLOBAL_ROLES entries must be static objects");
+    }
+    const code = stringValue(findObjectProperty(role, "code").value, "Role code");
+    if (roleCodes.has(code)) throw new Error(`Duplicate role code ${code}`);
+    roleCodes.add(code);
+    if (code === roleCode) selected = role;
+  }
+  return selected ? [removalRange(source, roles, selected)] : [];
+}
+
+export function planRoleTranslationEdit(source, stem, name, description = name) {
   if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(stem)) {
     throw new Error("Role translation stem must be a static identifier");
   }
   if (typeof name !== "string" || !name.trim()) {
     throw new Error("Role translation name must be a non-empty string");
+  }
+  if (typeof description !== "string" || !description.trim()) {
+    throw new Error("Role translation description must be a non-empty string");
   }
   const declarations = parseCatalog(source);
   const messages = requiredDeclaration(declarations, "messages", "ObjectExpression");
@@ -341,7 +410,7 @@ export function planRoleTranslationEdit(source, stem, name) {
   if (roleMessages.type !== "ObjectExpression") throw new Error("messages.role must be an object");
   const entries = [
     [stem, name],
-    [`${stem}Desc`, name],
+    [`${stem}Desc`, description],
   ];
   let present = 0;
   for (const [key, value] of entries) {
@@ -366,6 +435,25 @@ export function planRoleTranslationEdit(source, stem, name) {
         .join(""),
     },
   ];
+}
+
+export function planRoleTranslationDeletionEdit(source, stem) {
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(stem)) {
+    throw new Error("Role translation stem must be a static identifier");
+  }
+  const declarations = parseCatalog(source);
+  const messages = requiredDeclaration(declarations, "messages", "ObjectExpression");
+  const roleProperty = findObjectProperty(messages, "role");
+  const roleMessages = unwrap(roleProperty.value);
+  if (roleMessages.type !== "ObjectExpression") throw new Error("messages.role must be an object");
+  const properties = [stem, `${stem}Desc`]
+    .map((key) => findOptionalObjectProperty(roleMessages, key))
+    .filter(Boolean);
+  if (!properties.length) return [];
+  if (properties.length !== 2) {
+    throw new Error(`Role translation keys for ${stem} are incomplete`);
+  }
+  return properties.map((property) => removalRange(source, roleMessages, property));
 }
 
 export function applySourceEdits(source, edits) {

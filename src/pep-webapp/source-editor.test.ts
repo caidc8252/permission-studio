@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 import {
   applySourceEdits,
   planNewRoleEdit,
+  planRoleCodeEdit,
+  planRoleDeletionEdit,
   planRoleTranslationEdit,
+  planRoleTranslationDeletionEdit,
   planSourceEdits,
 } from "@/src/pep-webapp/source-editor.mjs";
 
@@ -76,7 +79,7 @@ describe("permission source editor", () => {
     const i18n = readFileSync(join(fixtures, "i18n", "zh-CN.ts"), "utf8");
     const changedI18n = applySourceEdits(
       i18n,
-      planRoleTranslationEdit(i18n, "presetAuditor", "审计员"),
+      planRoleTranslationEdit(i18n, "presetAuditor", "审计员", "查看审计记录"),
     );
 
     expect(changedRoles).toMatch(/"?roleId"?: 99/u);
@@ -84,7 +87,39 @@ describe("permission source editor", () => {
     expect(changedRoles).toMatch(/"?roleName"?: "role\.presetAuditor"/u);
     expect(changedRoles).toContain('"orders.view"');
     expect(changedI18n).toContain('presetAuditor: "审计员"');
-    expect(changedI18n).toContain('presetAuditorDesc: "审计员"');
+    expect(changedI18n).toContain('presetAuditorDesc: "查看审计记录"');
+  });
+
+  it("renames a static role code idempotently without changing its other fields", () => {
+    const source = readFileSync(join(fixtures, "roles.ts"), "utf8");
+    const changed = applySourceEdits(
+      source,
+      planRoleCodeEdit(source, "preset_ops", "preset_operations"),
+    );
+
+    expect(changed).toContain('code: "preset_operations"');
+    expect(changed).not.toContain('code: "preset_ops"');
+    expect(changed).toContain("// preserved inline");
+    expect(
+      applySourceEdits(changed, planRoleCodeEdit(changed, "preset_ops", "preset_operations")),
+    ).toBe(changed);
+  });
+
+  it("deletes a static role and both translation entries idempotently", () => {
+    const roles = readFileSync(join(fixtures, "roles.ts"), "utf8");
+    const changedRoles = applySourceEdits(roles, planRoleDeletionEdit(roles, "preset_ops"));
+    const i18n = readFileSync(join(fixtures, "i18n", "zh-CN.ts"), "utf8");
+    const changedI18n = applySourceEdits(i18n, planRoleTranslationDeletionEdit(i18n, "presetOps"));
+
+    expect(changedRoles).not.toContain('code: "preset_ops"');
+    expect(changedI18n).not.toContain("presetOps:");
+    expect(changedI18n).not.toContain("presetOpsDesc:");
+    expect(applySourceEdits(changedRoles, planRoleDeletionEdit(changedRoles, "preset_ops"))).toBe(
+      changedRoles,
+    );
+    expect(
+      applySourceEdits(changedI18n, planRoleTranslationDeletionEdit(changedI18n, "presetOps")),
+    ).toBe(changedI18n);
   });
 
   it("rejects duplicate role ids and occupied translation keys", () => {

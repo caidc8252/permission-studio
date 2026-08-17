@@ -8,6 +8,12 @@ const addRemoveSchema = z.strictObject({
 });
 const roleChangeSchema = z.strictObject({
   roleCode: identifierSchema.regex(/^preset_/i, "role code must use the preset_ prefix"),
+  newRoleCode: identifierSchema
+    .regex(
+      /^preset_[a-z0-9_]+$/,
+      "new role code must use the preset_ prefix and lowercase identifiers",
+    )
+    .optional(),
   add: leafArraySchema,
   remove: leafArraySchema,
 });
@@ -22,6 +28,13 @@ const newRoleSchema = z.strictObject({
     "zh-CN": z.string().trim().min(1).max(100),
     ja: z.string().trim().min(1).max(100),
   }),
+  descriptions: z
+    .strictObject({
+      en: z.string().trim().min(1).max(500),
+      "zh-CN": z.string().trim().min(1).max(500),
+      ja: z.string().trim().min(1).max(500),
+    })
+    .optional(),
   permissionCodes: leafArraySchema,
 });
 const contractChangeSchema = z.strictObject({
@@ -31,6 +44,10 @@ const contractChangeSchema = z.strictObject({
   menus: addRemoveSchema,
   widgets: addRemoveSchema,
 });
+const deletedRoleCodeSchema = identifierSchema.regex(
+  /^preset_[a-z0-9_]+$/,
+  "deleted role code must use the preset_ prefix and lowercase identifiers",
+);
 
 function findOverlap(left: readonly string[], right: readonly string[]): string[] {
   const rightSet = new Set(right);
@@ -72,6 +89,7 @@ export const permissionChangeSchema = z
         message: "reason must not contain control characters",
       }),
     newRoles: z.array(newRoleSchema).max(50),
+    deletedRoleCodes: z.array(deletedRoleCodeSchema).max(50).optional(),
     roleChanges: z.array(roleChangeSchema).max(50),
     contractChanges: z.array(contractChangeSchema).max(20),
   })
@@ -115,6 +133,7 @@ export const permissionChangeSchema = z
     }
 
     const roleCodes = new Set<string>();
+    const renamedRoleCodes = new Set<string>();
     for (const [index, role] of change.roleChanges.entries()) {
       if (roleCodes.has(role.roleCode)) {
         context.addIssue({
@@ -124,6 +143,24 @@ export const permissionChangeSchema = z
         });
       }
       roleCodes.add(role.roleCode);
+      if (role.newRoleCode) {
+        const normalized = role.newRoleCode.toLocaleLowerCase();
+        if (normalized === role.roleCode.toLocaleLowerCase()) {
+          context.addIssue({
+            code: "custom",
+            path: ["roleChanges", index, "newRoleCode"],
+            message: "new role code must differ from the current role code",
+          });
+        }
+        if (renamedRoleCodes.has(normalized) || newRoleCodes.has(normalized)) {
+          context.addIssue({
+            code: "custom",
+            path: ["roleChanges", index, "newRoleCode"],
+            message: `duplicate renamed role code "${role.newRoleCode}"`,
+          });
+        }
+        renamedRoleCodes.add(normalized);
+      }
       const overlap = findOverlap(role.add, role.remove);
       if (overlap.length) {
         context.addIssue({
@@ -132,6 +169,25 @@ export const permissionChangeSchema = z
           message: `permissions cannot appear in both add and remove: ${overlap.join(", ")}`,
         });
       }
+    }
+
+    const deletedRoleCodes = new Set<string>();
+    for (const [index, roleCode] of (change.deletedRoleCodes ?? []).entries()) {
+      if (deletedRoleCodes.has(roleCode)) {
+        context.addIssue({
+          code: "custom",
+          path: ["deletedRoleCodes", index],
+          message: `duplicate deleted role code "${roleCode}"`,
+        });
+      }
+      if (newRoleCodes.has(roleCode.toLocaleLowerCase()) || roleCodes.has(roleCode)) {
+        context.addIssue({
+          code: "custom",
+          path: ["deletedRoleCodes", index],
+          message: `deleted role "${roleCode}" cannot also be added or modified`,
+        });
+      }
+      deletedRoleCodes.add(roleCode);
     }
 
     const contractTypes = new Set<string>();
@@ -158,7 +214,10 @@ export const permissionChangeSchema = z
 
     const hasChange =
       change.newRoles.length > 0 ||
-      change.roleChanges.some((role) => role.add.length || role.remove.length) ||
+      Boolean(change.deletedRoleCodes?.length) ||
+      change.roleChanges.some(
+        (role) => role.newRoleCode || role.add.length || role.remove.length,
+      ) ||
       change.contractChanges.some(
         (contract) =>
           contract.menus.add.length ||
@@ -195,16 +254,28 @@ export function normalizePermissionChange(input: unknown): PermissionChange {
           "zh-CN": role.names["zh-CN"].trim(),
           ja: role.names.ja.trim(),
         },
+        ...(role.descriptions
+          ? {
+              descriptions: {
+                en: role.descriptions.en.trim(),
+                "zh-CN": role.descriptions["zh-CN"].trim(),
+                ja: role.descriptions.ja.trim(),
+              },
+            }
+          : {}),
         permissionCodes: sortedUnique(role.permissionCodes),
       }))
       .sort((left, right) => left.roleId - right.roleId),
+    ...(parsed.deletedRoleCodes?.length
+      ? { deletedRoleCodes: sortedUnique(parsed.deletedRoleCodes) }
+      : {}),
     roleChanges: parsed.roleChanges
       .map((role) => ({
         ...role,
         add: sortedUnique(role.add),
         remove: sortedUnique(role.remove),
       }))
-      .filter((role) => role.add.length || role.remove.length)
+      .filter((role) => role.newRoleCode || role.add.length || role.remove.length)
       .sort((left, right) => left.roleCode.localeCompare(right.roleCode)),
     contractChanges: parsed.contractChanges
       .map((contract) => ({

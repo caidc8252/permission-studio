@@ -64,6 +64,71 @@ describe("permission change protocol", () => {
     });
   });
 
+  it("keeps a code-only role rename and rejects duplicate rename targets", () => {
+    expect(
+      normalizePermissionChange({
+        ...validChange,
+        roleChanges: [
+          {
+            roleCode: "preset_ops",
+            newRoleCode: "preset_operations",
+            add: [],
+            remove: [],
+          },
+        ],
+      }).roleChanges,
+    ).toEqual([
+      {
+        roleCode: "preset_ops",
+        newRoleCode: "preset_operations",
+        add: [],
+        remove: [],
+      },
+    ]);
+    expect(() =>
+      normalizePermissionChange({
+        ...validChange,
+        roleChanges: [
+          {
+            roleCode: "preset_ops",
+            newRoleCode: "preset_shared",
+            add: [],
+            remove: [],
+          },
+          {
+            roleCode: "preset_support",
+            newRoleCode: "preset_shared",
+            add: [],
+            remove: [],
+          },
+        ],
+      }),
+    ).toThrow(/duplicate renamed role/i);
+  });
+
+  it("normalizes role deletions and rejects delete-modify conflicts", () => {
+    expect(
+      normalizePermissionChange({
+        ...validChange,
+        deletedRoleCodes: ["preset_support", "preset_ops"],
+        roleChanges: [],
+      }).deletedRoleCodes,
+    ).toEqual(["preset_ops", "preset_support"]);
+    expect(() =>
+      normalizePermissionChange({
+        ...validChange,
+        deletedRoleCodes: ["preset_ops", "preset_ops"],
+        roleChanges: [],
+      }),
+    ).toThrow(/duplicate deleted role/i);
+    expect(() =>
+      normalizePermissionChange({
+        ...validChange,
+        deletedRoleCodes: ["preset_ops"],
+      }),
+    ).toThrow(/cannot also be added or modified/i);
+  });
+
   it("normalizes new roles and rejects duplicate identities", () => {
     expect(
       normalizePermissionChange({

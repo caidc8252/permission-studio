@@ -3,12 +3,15 @@ import type { PermissionStudioModel } from "@/src/domain/model";
 import {
   normalizeNewRole,
   roleI18nStem,
+  validateRoleCode,
   type NewRoleDraft,
   type NewRoleInput,
 } from "@/src/domain/new-role";
 
 export interface PermissionDraft {
   newRoles: NewRoleDraft[];
+  deletedRoleCodes?: string[];
+  roleRenames?: Record<string, string>;
   rolePermissions: Record<string, string[]>;
   contractMenus: Record<string, string[]>;
   contractWidgets: Record<string, string[]>;
@@ -16,6 +19,8 @@ export interface PermissionDraft {
 
 export interface ImpactDiff {
   addedRoles: NewRoleDraft[];
+  deletedRoleCodes?: string[];
+  renamedRoles: Array<{ oldCode: string; newCode: string }>;
   addedRolePermissions: Array<{ roleCode: string; code: string }>;
   removedRolePermissions: Array<{ roleCode: string; code: string }>;
   addedContractOwners: Array<{
@@ -95,10 +100,44 @@ function differences(
 export function createEmptyDraft(): PermissionDraft {
   return {
     newRoles: [],
+    roleRenames: {},
     rolePermissions: {},
     contractMenus: {},
     contractWidgets: {},
   };
+}
+
+export function originalRoleCode(draft: PermissionDraft, roleCode: string): string {
+  return (
+    Object.entries(draft.roleRenames ?? {}).find(
+      ([, renamedCode]) => renamedCode === roleCode,
+    )?.[0] ?? roleCode
+  );
+}
+
+export function renameExistingRole(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  roleCode: string,
+  nextCode: string,
+): PermissionDraft {
+  editableRole(model, roleCode);
+  const roleRenames = { ...(draft.roleRenames ?? {}) };
+  const occupiedCodes = [
+    ...draft.newRoles.map((role) => role.code),
+    ...Object.entries(roleRenames)
+      .filter(([sourceCode]) => sourceCode !== roleCode)
+      .map(([, renamedCode]) => renamedCode),
+  ];
+  const error = validateRoleCode(model, nextCode, {
+    excludeModelCode: roleCode,
+    occupiedCodes,
+  });
+  if (error) throw new Error(error);
+  const normalized = nextCode.trim();
+  if (normalized === roleCode) delete roleRenames[roleCode];
+  else roleRenames[roleCode] = normalized;
+  return { ...draft, roleRenames };
 }
 
 export function addNewRole(
@@ -110,6 +149,23 @@ export function addNewRole(
   return {
     ...draft,
     newRoles: [...draft.newRoles, role].sort((left, right) => left.roleId - right.roleId),
+  };
+}
+
+export function updateNewRole(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  roleCode: string,
+  input: NewRoleInput,
+): PermissionDraft {
+  if (!draft.newRoles.some((role) => role.code === roleCode)) {
+    throw new Error(`Unknown new role "${roleCode}"`);
+  }
+  const otherNewRoles = draft.newRoles.filter((role) => role.code !== roleCode);
+  const role = normalizeNewRole(model, otherNewRoles, input);
+  return {
+    ...draft,
+    newRoles: [...otherNewRoles, role].sort((left, right) => left.roleId - right.roleId),
   };
 }
 
@@ -170,11 +226,33 @@ export function setContractOwnerMembership(
 
 export function discardRoleDraft(draft: PermissionDraft, roleCode: string): PermissionDraft {
   const rolePermissions = { ...draft.rolePermissions };
+  const roleRenames = { ...(draft.roleRenames ?? {}) };
   delete rolePermissions[roleCode];
-  return {
+  delete roleRenames[roleCode];
+  const next: PermissionDraft = {
     ...draft,
     newRoles: draft.newRoles.filter((role) => role.code !== roleCode),
+    deletedRoleCodes: (draft.deletedRoleCodes ?? []).filter((code) => code !== roleCode),
+    roleRenames,
     rolePermissions,
+  };
+  if (!next.deletedRoleCodes?.length) delete next.deletedRoleCodes;
+  return next;
+}
+
+export function deleteRole(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  roleCode: string,
+): PermissionDraft {
+  if (draft.newRoles.some((role) => role.code === roleCode)) {
+    return discardRoleDraft(draft, roleCode);
+  }
+  editableRole(model, roleCode);
+  const next = discardRoleDraft(draft, roleCode);
+  return {
+    ...next,
+    deletedRoleCodes: sortedUnique([...(next.deletedRoleCodes ?? []), roleCode]),
   };
 }
 
@@ -282,17 +360,20 @@ export function applyDraftToModel(
         const stem = roleI18nStem(role.code);
         return [
           [`role.${stem}`, role.names[locale]],
-          [`role.${stem}Desc`, role.names[locale]],
+          [`role.${stem}Desc`, role.descriptions?.[locale] ?? role.names[locale]],
         ];
       }),
     );
   return {
     ...model,
     roles: [
-      ...model.roles.map((role) => ({
-        ...role,
-        permissionCodes: draft.rolePermissions[role.code] ?? role.permissionCodes,
-      })),
+      ...model.roles
+        .filter((role) => !(draft.deletedRoleCodes ?? []).includes(role.code))
+        .map((role) => ({
+          ...role,
+          code: draft.roleRenames?.[role.code] ?? role.code,
+          permissionCodes: draft.rolePermissions[role.code] ?? role.permissionCodes,
+        })),
       ...newRoles,
     ].sort((left, right) => left.code.localeCompare(right.code)),
     translations: {
@@ -314,6 +395,11 @@ export function applyDraftToModel(
 export function buildImpactDiff(model: PermissionStudioModel, draft: PermissionDraft): ImpactDiff {
   const impact: ImpactDiff = {
     addedRoles: [...draft.newRoles],
+    deletedRoleCodes: sortedUnique(draft.deletedRoleCodes ?? []),
+    renamedRoles: Object.entries(draft.roleRenames ?? {})
+      .filter(([oldCode, newCode]) => oldCode !== newCode)
+      .map(([oldCode, newCode]) => ({ oldCode, newCode }))
+      .sort((left, right) => left.oldCode.localeCompare(right.oldCode)),
     addedRolePermissions: [],
     removedRolePermissions: [],
     addedContractOwners: [],
@@ -348,6 +434,8 @@ export function buildImpactDiff(model: PermissionStudioModel, draft: PermissionD
 
   const scenarios = new Set<string>();
   for (const role of impact.addedRoles) scenarios.add(`role:${role.code}`);
+  for (const roleCode of impact.deletedRoleCodes ?? []) scenarios.add(`role:${roleCode}`);
+  for (const role of impact.renamedRoles) scenarios.add(`role:${role.newCode}`);
   for (const item of [...impact.addedRolePermissions, ...impact.removedRolePermissions]) {
     scenarios.add(`role:${item.roleCode}`);
   }
@@ -363,14 +451,23 @@ export function buildPermissionChange(
   draft: PermissionDraft,
   metadata: { requestId: string; title: string; reason: string },
 ): PermissionChange {
-  const roleChanges = Object.entries(draft.rolePermissions).map(([roleCode, codes]) => {
-    const role = model.roles.find((candidate) => candidate.code === roleCode);
-    if (!role) throw new Error(`Unknown role "${roleCode}"`);
-    return {
-      roleCode,
-      ...differences(codes, role.permissionCodes),
-    };
-  });
+  const changedRoleCodes = new Set([
+    ...Object.keys(draft.rolePermissions),
+    ...Object.keys(draft.roleRenames ?? {}),
+  ]);
+  const deletedRoleCodes = new Set(draft.deletedRoleCodes ?? []);
+  const roleChanges = [...changedRoleCodes]
+    .filter((roleCode) => !deletedRoleCodes.has(roleCode))
+    .map((roleCode) => {
+      const role = model.roles.find((candidate) => candidate.code === roleCode);
+      if (!role) throw new Error(`Unknown role "${roleCode}"`);
+      const codes = draft.rolePermissions[roleCode] ?? role.permissionCodes;
+      return {
+        roleCode,
+        newRoleCode: draft.roleRenames?.[roleCode],
+        ...differences(codes, role.permissionCodes),
+      };
+    });
   const contractTypes = new Set([
     ...Object.keys(draft.contractMenus),
     ...Object.keys(draft.contractWidgets),
@@ -394,6 +491,7 @@ export function buildPermissionChange(
     title: metadata.title,
     reason: metadata.reason,
     newRoles: draft.newRoles,
+    ...(deletedRoleCodes.size ? { deletedRoleCodes: [...deletedRoleCodes].sort() } : {}),
     roleChanges,
     contractChanges,
   });
