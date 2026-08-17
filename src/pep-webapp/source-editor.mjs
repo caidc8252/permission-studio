@@ -107,6 +107,27 @@ function findObjectProperty(object, key) {
   return match;
 }
 
+function findOptionalObjectProperty(object, key) {
+  let match;
+  for (const property of object.properties) {
+    if (property.type === "SpreadElement") throw new Error("Object spreads are unsupported");
+    const name = propertyName(property);
+    if (name === key) {
+      if (match) throw new Error(`Duplicate catalog key ${key}`);
+      match = property;
+    }
+  }
+  return match;
+}
+
+function numberValue(node, context) {
+  const value = unwrap(node);
+  if (value?.type !== "NumericLiteral" || !Number.isInteger(value.value)) {
+    throw new Error(`${context} must be a static integer`);
+  }
+  return value.value;
+}
+
 function findTargetArray(declarations, request) {
   if (request.owner === "GLOBAL_ROLES") {
     const roles = requiredDeclaration(declarations, request.owner, "ArrayExpression");
@@ -225,6 +246,126 @@ export function planSourceEdits(source, request) {
   const addition = additionEdit(source, array, additions);
   if (addition) edits.push(addition);
   return edits;
+}
+
+function insertionIndent(source, collection) {
+  const close = collection.end - 1;
+  const closingLineStart = source.lastIndexOf("\n", close - 1) + 1;
+  const closingIndent = source.slice(closingLineStart, close);
+  const firstEntry = (collection.elements ?? collection.properties).find(Boolean);
+  const firstLineStart = firstEntry ? source.lastIndexOf("\n", firstEntry.start - 1) + 1 : -1;
+  return {
+    close,
+    closingLineStart,
+    entryIndent: firstEntry ? source.slice(firstLineStart, firstEntry.start) : `${closingIndent}  `,
+  };
+}
+
+export function planNewRoleEdit(source, role) {
+  if (!Number.isInteger(role.roleId) || role.roleId < 1 || role.roleId >= 1000) {
+    throw new Error("Role ID must be an integer from 1 to 999");
+  }
+  if (!/^preset_[a-z0-9_]+$/u.test(role.code)) {
+    throw new Error("Role code must be a lowercase preset_ identifier");
+  }
+  if (
+    !Array.isArray(role.permissionCodes) ||
+    role.permissionCodes.some((code) => typeof code !== "string" || !code)
+  ) {
+    throw new Error("Role permission codes must be static strings");
+  }
+  const declarations = parseCatalog(source);
+  const roles = requiredDeclaration(declarations, "GLOBAL_ROLES", "ArrayExpression");
+  for (const element of roles.elements) {
+    const candidate = unwrap(element);
+    if (!candidate || candidate.type !== "ObjectExpression") {
+      throw new Error("GLOBAL_ROLES entries must be static objects");
+    }
+    const candidateCode = stringValue(findObjectProperty(candidate, "code").value, "Role code");
+    const idProperty = findOptionalObjectProperty(candidate, "roleId");
+    const candidateId = idProperty ? numberValue(idProperty.value, "Role ID") : undefined;
+    if (candidateCode === role.code) {
+      if (candidateId === role.roleId) return [];
+      throw new Error(`Duplicate role code ${role.code}`);
+    }
+    if (candidateId === role.roleId) throw new Error(`Duplicate role ID ${role.roleId}`);
+  }
+
+  const stem = role.code.replace(/_(.)/gu, (_, character) => character.toUpperCase());
+  const serialized = JSON.stringify(
+    {
+      roleId: role.roleId,
+      code: role.code,
+      roleName: `role.${stem}`,
+      remark: `role.${stem}Desc`,
+      permissionCodes: [...new Set(role.permissionCodes)].sort(),
+    },
+    null,
+    2,
+  );
+  const newline = source.includes("\r\n") ? "\r\n" : "\n";
+  if (!source.slice(roles.start, roles.end).includes("\n")) {
+    return [
+      {
+        start: roles.end - 1,
+        end: roles.end - 1,
+        text: `${roles.elements.length ? ", " : ""}${JSON.stringify({
+          roleId: role.roleId,
+          code: role.code,
+          roleName: `role.${stem}`,
+          remark: `role.${stem}Desc`,
+          permissionCodes: [...new Set(role.permissionCodes)].sort(),
+        })}`,
+      },
+    ];
+  }
+  const { closingLineStart, entryIndent } = insertionIndent(source, roles);
+  const text = serialized
+    .split("\n")
+    .map((line) => `${entryIndent}${line}`)
+    .join(newline);
+  return [{ start: closingLineStart, end: closingLineStart, text: `${text},${newline}` }];
+}
+
+export function planRoleTranslationEdit(source, stem, name) {
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(stem)) {
+    throw new Error("Role translation stem must be a static identifier");
+  }
+  if (typeof name !== "string" || !name.trim()) {
+    throw new Error("Role translation name must be a non-empty string");
+  }
+  const declarations = parseCatalog(source);
+  const messages = requiredDeclaration(declarations, "messages", "ObjectExpression");
+  const roleProperty = findObjectProperty(messages, "role");
+  const roleMessages = unwrap(roleProperty.value);
+  if (roleMessages.type !== "ObjectExpression") throw new Error("messages.role must be an object");
+  const entries = [
+    [stem, name],
+    [`${stem}Desc`, name],
+  ];
+  let present = 0;
+  for (const [key, value] of entries) {
+    const property = findOptionalObjectProperty(roleMessages, key);
+    if (!property) continue;
+    present += 1;
+    if (stringValue(property.value, `messages.role.${key}`) !== value) {
+      throw new Error(`Role translation key ${key} already exists`);
+    }
+  }
+  if (present === entries.length) return [];
+  if (present > 0) throw new Error(`Role translation keys for ${stem} are incomplete`);
+
+  const newline = source.includes("\r\n") ? "\r\n" : "\n";
+  const { closingLineStart, entryIndent } = insertionIndent(source, roleMessages);
+  return [
+    {
+      start: closingLineStart,
+      end: closingLineStart,
+      text: entries
+        .map(([key, value]) => `${entryIndent}${key}: ${JSON.stringify(value)},${newline}`)
+        .join(""),
+    },
+  ];
 }
 
 export function applySourceEdits(source, edits) {

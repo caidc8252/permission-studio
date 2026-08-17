@@ -23,6 +23,12 @@ function values(items: readonly string[]): string {
 }
 
 export function buildPullRequestBody(input: PullRequestBodyInput): string {
+  const newRoleRows = input.change.newRoles.length
+    ? input.change.newRoles.map(
+        (role) =>
+          `| ${role.roleId} | \`${cell(role.code)}\` | ${cell(role.names["zh-CN"])} | ${cell(role.names.en)} | ${cell(role.names.ja)} | ${values(role.permissionCodes)} |`,
+      )
+    : ["| — | — | — | — | — | — |"];
   const roleRows = input.change.roleChanges.length
     ? input.change.roleChanges.map(
         (role) => `| \`${cell(role.roleCode)}\` | ${values(role.add)} | ${values(role.remove)} |`,
@@ -46,6 +52,12 @@ export function buildPullRequestBody(input: PullRequestBodyInput): string {
     `- Source SHA: \`${input.change.baseSha}\``,
     `- Actor: @${cell(input.actor)}`,
     `- Request: \`${input.change.requestId}\``,
+    "",
+    "### New roles",
+    "",
+    "| ID | Code | 中文名称 | English name | 日本語名 | Initial permissions |",
+    "| --- | --- | --- | --- | --- | --- |",
+    ...newRoleRows,
     "",
     "### Role permissions",
     "",

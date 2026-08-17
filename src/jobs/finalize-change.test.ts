@@ -14,6 +14,7 @@ const change: PermissionChange = {
   baseSha,
   title: "chore(permissions): grant report export",
   reason: "为运营角色增加订单查看能力",
+  newRoles: [],
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.view"], remove: [] }],
   contractChanges: [],
 };
@@ -111,6 +112,9 @@ describe("finalizeChange", () => {
         "--",
         "apps/web/manifest/catalog/roles.ts",
         "apps/web/manifest/catalog/contract-types.ts",
+        "apps/web/manifest/catalog/i18n/en.ts",
+        "apps/web/manifest/catalog/i18n/zh-CN.ts",
+        "apps/web/manifest/catalog/i18n/ja.ts",
       ],
       ["git", "diff", "--cached", "--name-only"],
       ["git", "diff", "--cached", "--binary"],

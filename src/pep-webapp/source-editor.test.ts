@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { applySourceEdits, planSourceEdits } from "@/src/pep-webapp/source-editor.mjs";
+import {
+  applySourceEdits,
+  planNewRoleEdit,
+  planRoleTranslationEdit,
+  planSourceEdits,
+} from "@/src/pep-webapp/source-editor.mjs";
 
 const fixtures = join(process.cwd(), "tests", "fixtures", "pep-webapp", "source-editor");
 
@@ -55,6 +60,51 @@ describe("permission source editor", () => {
 
     expect(changed).toContain('["a", "b"]');
     expect(changed).not.toMatch(/(?<!\r)\n/u);
+  });
+
+  it("adds a static role and matching role translations", () => {
+    const roles = readFileSync(join(fixtures, "roles.ts"), "utf8");
+    const changedRoles = applySourceEdits(
+      roles,
+      planNewRoleEdit(roles, {
+        roleId: 99,
+        code: "preset_auditor",
+        names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+        permissionCodes: ["orders.view"],
+      }),
+    );
+    const i18n = readFileSync(join(fixtures, "i18n", "zh-CN.ts"), "utf8");
+    const changedI18n = applySourceEdits(
+      i18n,
+      planRoleTranslationEdit(i18n, "presetAuditor", "审计员"),
+    );
+
+    expect(changedRoles).toMatch(/"?roleId"?: 99/u);
+    expect(changedRoles).toMatch(/"?code"?: "preset_auditor"/u);
+    expect(changedRoles).toMatch(/"?roleName"?: "role\.presetAuditor"/u);
+    expect(changedRoles).toContain('"orders.view"');
+    expect(changedI18n).toContain('presetAuditor: "审计员"');
+    expect(changedI18n).toContain('presetAuditorDesc: "审计员"');
+  });
+
+  it("rejects duplicate role ids and occupied translation keys", () => {
+    expect(() =>
+      planNewRoleEdit(
+        'const GLOBAL_ROLES = [{ roleId: 99, code: "preset_old", permissionCodes: [] }];',
+        {
+          roleId: 99,
+          code: "preset_auditor",
+          permissionCodes: [],
+        },
+      ),
+    ).toThrow(/duplicate role ID/i);
+    expect(() =>
+      planRoleTranslationEdit(
+        'const messages = { role: { presetAuditor: "Auditor" } };',
+        "presetAuditor",
+        "审计员",
+      ),
+    ).toThrow(/already exists/i);
   });
 
   it("expands only an inherited widget spread when removing a common widget", () => {

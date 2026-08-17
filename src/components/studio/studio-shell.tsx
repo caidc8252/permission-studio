@@ -52,9 +52,16 @@ function firstContract(model: PermissionStudioModel): string {
   return model.contractTypes.find((contractType) => contractType !== "TEST") ?? "";
 }
 
-function translatedRole(model: PermissionStudioModel, roleCode: string): string {
+function translatedRole(
+  model: PermissionStudioModel,
+  draft: PermissionDraft,
+  roleCode: string,
+): string {
   const role = model.roles.find((candidate) => candidate.code === roleCode);
-  return role ? (model.translations["zh-CN"][role.roleName] ?? roleCode) : roleCode;
+  if (role) return model.translations["zh-CN"][role.roleName] ?? roleCode;
+  return (
+    draft.newRoles.find((candidate) => candidate.code === roleCode)?.names["zh-CN"] ?? roleCode
+  );
 }
 
 function conflictKindLabel(conflict: DraftConflict): string {
@@ -152,14 +159,17 @@ export function StudioShell({
   useEffect(() => {
     if (!model) return;
     if (
-      !model.roles.some((role) => role.code === selectedRoleCode && role.code.startsWith("preset_"))
+      !model.roles.some(
+        (role) => role.code === selectedRoleCode && role.code.startsWith("preset_"),
+      ) &&
+      !draft.newRoles.some((role) => role.code === selectedRoleCode)
     ) {
       setSelectedRoleCode(firstRole(model));
     }
     if (!model.contractTypes.includes(selectedContractType) || selectedContractType === "TEST") {
       setSelectedContractType(firstContract(model));
     }
-  }, [model, selectedContractType, selectedRoleCode]);
+  }, [draft.newRoles, model, selectedContractType, selectedRoleCode]);
 
   const refresh = async () => {
     setLoading(true);
@@ -201,7 +211,10 @@ export function StudioShell({
   const draftLocked = jobActive || loading;
   const currentObject =
     task === "roles" && selectedRoleCode
-      ? { scenario: `role:${selectedRoleCode}`, label: translatedRole(model!, selectedRoleCode) }
+      ? {
+          scenario: `role:${selectedRoleCode}`,
+          label: translatedRole(model!, draft, selectedRoleCode),
+        }
       : task === "contracts" && selectedContractType
         ? { scenario: `contract:${selectedContractType}`, label: `合同 ${selectedContractType}` }
         : undefined;
@@ -241,20 +254,7 @@ export function StudioShell({
   };
 
   return (
-    <section className={styles.studio} aria-labelledby="studio-heading">
-      <header className={styles.header}>
-        <div>
-          <p className="eyebrow">PERMISSION STUDIO</p>
-          <h2 id="studio-heading">权限变更工作台</h2>
-          <p className={styles.sourceSha}>
-            来源 SHA：<code>{model.sourceSha}</code>
-          </p>
-        </div>
-        <button type="button" disabled={loading || jobActive} onClick={() => void refresh()}>
-          {loading ? "刷新中…" : "刷新 develop"}
-        </button>
-      </header>
-
+    <section className={styles.studio} aria-label="权限变更工作台">
       {loadError ? <p role="alert">刷新失败，当前仍显示已加载的来源版本。请稍后重试。</p> : null}
       {jobActive ? (
         <p className={styles.jobNotice} role="status">
@@ -279,23 +279,33 @@ export function StudioShell({
         </section>
       ) : null}
 
-      <nav className={styles.tabs} role="tablist" aria-label="权限工作区">
-        {tasks.map((item) => (
-          <button
-            key={item.id}
-            id={`studio-tab-${item.id}`}
-            type="button"
-            role="tab"
-            aria-selected={task === item.id}
-            aria-controls={`studio-panel-${item.id}`}
-            tabIndex={task === item.id ? 0 : -1}
-            onClick={() => openTask(item.id)}
-            onKeyDown={(event) => navigateTabs(event, item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      <div className={styles.tabBar}>
+        <nav className={styles.tabs} role="tablist" aria-label="权限工作区">
+          {tasks.map((item) => (
+            <button
+              key={item.id}
+              id={`studio-tab-${item.id}`}
+              type="button"
+              role="tab"
+              aria-selected={task === item.id}
+              aria-controls={`studio-panel-${item.id}`}
+              tabIndex={task === item.id ? 0 : -1}
+              onClick={() => openTask(item.id)}
+              onKeyDown={(event) => navigateTabs(event, item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <button
+          className={styles.refreshAction}
+          type="button"
+          disabled={loading || jobActive}
+          onClick={() => void refresh()}
+        >
+          {loading ? "刷新中…" : "刷新 develop"}
+        </button>
+      </div>
 
       {tasks.map((item) => (
         <section
@@ -340,6 +350,7 @@ export function StudioShell({
               返回编辑
             </button>
             <button
+              className={styles.primaryAction}
               type="button"
               disabled={draftLocked}
               onClick={() => {
@@ -404,6 +415,7 @@ export function StudioShell({
 }
 
 const buildImpactDiffPlaceholder = {
+  addedRoles: [],
   addedRolePermissions: [],
   removedRolePermissions: [],
   addedContractOwners: [],

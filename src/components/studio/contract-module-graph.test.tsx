@@ -187,7 +187,7 @@ describe("ContractModuleGraph", () => {
     expect(onDraftChange).not.toHaveBeenCalled();
   });
 
-  it("collapses and expands complete node groups", async () => {
+  it("collapses and expands individual node groups", async () => {
     const user = userEvent.setup();
     render(
       <ContractModuleGraph
@@ -216,12 +216,6 @@ describe("ContractModuleGraph", () => {
 
     await user.click(screen.getByRole("button", { name: "展开组件" }));
     expect(screen.getByRole("checkbox", { name: "启用快捷入口" })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "全部收起" }));
-    expect(screen.queryByText("菜单")).not.toBeInTheDocument();
-    expect(flow.fitView).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "全部展开" }));
-    expect(screen.getAllByText("菜单").length).toBeGreaterThan(0);
   });
 
   it("reveals and locates a searched descendant through a collapsed branch", async () => {
@@ -250,8 +244,7 @@ describe("ContractModuleGraph", () => {
     expect(screen.queryByRole("checkbox", { name: "启用订单历史" })).not.toBeInTheDocument();
   });
 
-  it("keeps canvas tools available without explanatory chrome", async () => {
-    const user = userEvent.setup();
+  it("keeps search available without extra canvas actions or explanatory chrome", () => {
     render(
       <ContractModuleGraph
         model={model}
@@ -266,12 +259,13 @@ describe("ContractModuleGraph", () => {
     expect(screen.queryByText("部分启用：橙色关系")).not.toBeInTheDocument();
     expect(screen.queryByText("未启用：灰色虚线")).not.toBeInTheDocument();
     expect(screen.queryByText(/拖动空白处平移/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "适应画布" }));
-    expect(flow.fitView).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "自动整理" })).toBeEnabled();
+    expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "全部收起" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "适应画布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "自动整理" })).not.toBeInTheDocument();
   });
 
-  it("locks membership and layout changes while keeping view tools available", () => {
+  it("locks membership changes while keeping search available", () => {
     render(
       <ContractModuleGraph
         model={model}
@@ -284,9 +278,9 @@ describe("ContractModuleGraph", () => {
 
     expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "收起订单" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "自动整理" })).toBeDisabled();
     expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "适应画布" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "适应画布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "自动整理" })).not.toBeInTheDocument();
     expect(screen.getByTestId("react-flow")).toHaveAttribute("data-draggable", "false");
   });
 });

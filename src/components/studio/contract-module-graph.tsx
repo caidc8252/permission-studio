@@ -134,24 +134,9 @@ export function ContractModuleGraph({
   const onNodesChange = useCallback((changes: NodeChange<ContractModuleFlowNode>[]) => {
     setNodes((current) => applyNodeChanges(changes, current));
   }, []);
-  const fitCanvas = () => {
-    void flowInstance?.fitView({ padding: 0.2, duration: 320 });
-  };
-  const resetLayout = () => {
-    if (disabled) return;
-    setNodes(automaticLayout.nodes);
-    requestAnimationFrame(() => fitCanvas());
-  };
   const goToNextMatch = () => {
     if (projection.matchIds.length === 0) return;
     setMatchIndex((current) => (current + 1) % projection.matchIds.length);
-  };
-  const toggleAllCollapsed = () => {
-    if (disabled) return;
-    setCollapsedByContract((current) => ({
-      ...current,
-      [contractType]: collapsed.size > 0 ? [] : [`contract:${contractType}`],
-    }));
   };
 
   return (
@@ -176,18 +161,6 @@ export function ContractModuleGraph({
                 下一个
               </button>
             ) : null}
-          </div>
-          <div className={styles.toolbarActions}>
-            {disabled ? <span className={styles.lockedBadge}>只读</span> : null}
-            <button type="button" disabled={disabled} onClick={toggleAllCollapsed}>
-              {collapsed.size > 0 ? "全部展开" : "全部收起"}
-            </button>
-            <button type="button" onClick={fitCanvas}>
-              适应画布
-            </button>
-            <button type="button" disabled={disabled} onClick={resetLayout}>
-              自动整理
-            </button>
           </div>
         </div>
         <ReactFlow<ContractModuleFlowNode>

@@ -11,6 +11,19 @@ const roleChangeSchema = z.strictObject({
   add: leafArraySchema,
   remove: leafArraySchema,
 });
+const newRoleSchema = z.strictObject({
+  roleId: z.number().int().min(1).max(999),
+  code: identifierSchema.regex(
+    /^preset_[a-z0-9_]+$/,
+    "role code must use the preset_ prefix and lowercase identifiers",
+  ),
+  names: z.strictObject({
+    en: z.string().trim().min(1).max(100),
+    "zh-CN": z.string().trim().min(1).max(100),
+    ja: z.string().trim().min(1).max(100),
+  }),
+  permissionCodes: leafArraySchema,
+});
 const contractChangeSchema = z.strictObject({
   contractType: identifierSchema.refine((value) => value !== "TEST", {
     message: "TEST is read-only",
@@ -58,10 +71,49 @@ export const permissionChangeSchema = z
       .refine((value) => !hasControlCharacter(value), {
         message: "reason must not contain control characters",
       }),
+    newRoles: z.array(newRoleSchema).max(50),
     roleChanges: z.array(roleChangeSchema).max(50),
     contractChanges: z.array(contractChangeSchema).max(20),
   })
   .superRefine((change, context) => {
+    const newRoleCodes = new Set<string>();
+    const newRoleIds = new Set<number>();
+    const newRoleNames = {
+      en: new Set<string>(),
+      "zh-CN": new Set<string>(),
+      ja: new Set<string>(),
+    };
+    for (const [index, role] of change.newRoles.entries()) {
+      const code = role.code.toLocaleLowerCase();
+      if (newRoleCodes.has(code)) {
+        context.addIssue({
+          code: "custom",
+          path: ["newRoles", index, "code"],
+          message: `duplicate new role code "${role.code}"`,
+        });
+      }
+      if (newRoleIds.has(role.roleId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["newRoles", index, "roleId"],
+          message: `duplicate new role id "${role.roleId}"`,
+        });
+      }
+      for (const locale of ["en", "zh-CN", "ja"] as const) {
+        const name = role.names[locale].trim().toLocaleLowerCase();
+        if (newRoleNames[locale].has(name)) {
+          context.addIssue({
+            code: "custom",
+            path: ["newRoles", index, "names", locale],
+            message: `duplicate new role ${locale} name "${role.names[locale]}"`,
+          });
+        }
+        newRoleNames[locale].add(name);
+      }
+      newRoleCodes.add(code);
+      newRoleIds.add(role.roleId);
+    }
+
     const roleCodes = new Set<string>();
     for (const [index, role] of change.roleChanges.entries()) {
       if (roleCodes.has(role.roleCode)) {
@@ -105,6 +157,7 @@ export const permissionChangeSchema = z
     }
 
     const hasChange =
+      change.newRoles.length > 0 ||
       change.roleChanges.some((role) => role.add.length || role.remove.length) ||
       change.contractChanges.some(
         (contract) =>
@@ -134,6 +187,17 @@ export function normalizePermissionChange(input: unknown): PermissionChange {
     ...parsed,
     title: parsed.title.trim(),
     reason: parsed.reason.trim(),
+    newRoles: parsed.newRoles
+      .map((role) => ({
+        ...role,
+        names: {
+          en: role.names.en.trim(),
+          "zh-CN": role.names["zh-CN"].trim(),
+          ja: role.names.ja.trim(),
+        },
+        permissionCodes: sortedUnique(role.permissionCodes),
+      }))
+      .sort((left, right) => left.roleId - right.roleId),
     roleChanges: parsed.roleChanges
       .map((role) => ({
         ...role,

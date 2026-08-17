@@ -13,6 +13,7 @@ import { validModel } from "@/tests/fixtures/model";
 
 const model = validModel as unknown as PermissionStudioModel;
 const draft: PermissionDraft = {
+  newRoles: [],
   rolePermissions: { preset_ops: ["orders.manage", "orders.view"] },
   contractMenus: {},
   contractWidgets: {},
@@ -61,16 +62,16 @@ describe("PullRequestFlow", () => {
     expect(screen.getByRole("heading", { name: "第 1 步：检查业务变更" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "运营" })).toBeVisible();
     expect(screen.getByText("管理订单")).toBeVisible();
-    expect(screen.getByRole("button", { name: "校验变更" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "下一步：校验与 diff" })).toBeDisabled();
 
     await user.type(screen.getByLabelText("PR 标题"), "short");
     await user.type(screen.getByLabelText("变更原因"), "足够长的变更原因");
-    expect(screen.getByRole("button", { name: "校验变更" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "下一步：校验与 diff" })).toBeDisabled();
     expect(screen.getByText("PR 标题必须为 8–120 个字符，且不能包含控制字符")).toBeVisible();
 
     await user.clear(screen.getByLabelText("PR 标题"));
     await user.type(screen.getByLabelText("PR 标题"), awaitingJob.title);
-    expect(screen.getByRole("button", { name: "校验变更" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "下一步：校验与 diff" })).toBeEnabled();
   });
 
   it("shows validation and exact Git diff, then requires explicit final confirmation", async () => {
@@ -89,20 +90,31 @@ describe("PullRequestFlow", () => {
     render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
 
     await fillValidMetadata(user);
-    await user.click(screen.getByRole("button", { name: "校验变更" }));
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
 
     expect(await screen.findByRole("heading", { name: "第 2 步：校验与完整 diff" })).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "第 1 步：检查业务变更" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "第 3 步：最终确认" })).not.toBeInTheDocument();
     expect(screen.getByText("typecheck")).toBeVisible();
     expect(screen.getByText("通过 · 12 ms")).toBeVisible();
     expect(screen.getByLabelText("服务器生成的完整 Git diff").textContent).toBe(exactDiff);
-    expect(screen.getByRole("heading", { name: "第 3 步：最终确认" })).toBeVisible();
-    const confirm = screen.getByRole("button", { name: "确认推送并创建 Draft PR" });
-    expect(confirm).toBeDisabled();
+    const next = screen.getByRole("button", { name: "下一步：最终确认" });
+    expect(next).toBeDisabled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByLabelText("已检查完整 diff"));
-    expect(confirm).toBeEnabled();
+    expect(next).toBeEnabled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    await user.click(next);
+
+    expect(screen.getByRole("heading", { name: "第 3 步：最终确认" })).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "第 2 步：校验与完整 diff" }),
+    ).not.toBeInTheDocument();
+    const confirm = screen.getByRole("button", { name: "确认推送并创建 Draft PR" });
+    expect(confirm).toBeEnabled();
     await user.click(confirm);
 
     expect(fetchMock).toHaveBeenLastCalledWith(
@@ -126,20 +138,59 @@ describe("PullRequestFlow", () => {
       render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
 
       await fillValidMetadata(user);
-      await user.click(screen.getByRole("button", { name: "校验变更" }));
+      await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
 
       expect(
         await screen.findByRole("heading", { name: "第 2 步：校验与完整 diff" }),
       ).toBeVisible();
       expect(screen.queryByLabelText("服务器生成的完整 Git diff")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("已检查完整 diff")).not.toBeInTheDocument();
-      const confirm = screen.getByRole("button", { name: "确认推送并创建 Draft PR" });
-      expect(confirm).toBeDisabled();
-      await user.click(confirm);
+      const next = screen.getByRole("button", { name: "下一步：最终确认" });
+      expect(next).toBeDisabled();
+      expect(
+        screen.queryByRole("button", { name: "确认推送并创建 Draft PR" }),
+      ).not.toBeInTheDocument();
+      await user.click(next);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/confirm"))).toBe(false);
     },
   );
+
+  it("discards the prepared job when returning so PR metadata can be edited", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(awaitingJob, { status: 202 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(Response.json(awaitingJob, { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
+
+    await fillValidMetadata(user);
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
+    expect(await screen.findByRole("heading", { name: "第 2 步：校验与完整 diff" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "上一步" }));
+    expect(screen.getByRole("heading", { name: "第 1 步：检查业务变更" })).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "第 2 步：校验与完整 diff" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("PR 标题")).toBeEnabled();
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `/api/changes/${requestId}`, {
+      method: "DELETE",
+    });
+
+    await user.clear(screen.getByLabelText("PR 标题"));
+    await user.type(screen.getByLabelText("PR 标题"), "更新后的权限变更标题");
+
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
+    expect(screen.getByRole("heading", { name: "第 2 步：校验与完整 diff" })).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/changes/prepare",
+      expect.objectContaining({ body: expect.stringContaining('"title":"更新后的权限变更标题"') }),
+    );
+  });
 
   it("keeps a preparation failure in validation stage", async () => {
     const user = userEvent.setup();
@@ -155,7 +206,7 @@ describe("PullRequestFlow", () => {
     render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
 
     await fillValidMetadata(user);
-    await user.click(screen.getByRole("button", { name: "校验变更" }));
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
 
     expect(await screen.findByText("变更校验失败，未进入最终确认")).toBeVisible();
     expect(screen.getByText("2. 校验与 diff")).toHaveAttribute("aria-current", "step");
@@ -173,7 +224,7 @@ describe("PullRequestFlow", () => {
     render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
 
     await fillValidMetadata(user);
-    await user.click(screen.getByRole("button", { name: "校验变更" }));
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
     await user.click(await screen.findByRole("button", { name: "丢弃准备结果" }));
 
     expect(fetchMock).toHaveBeenLastCalledWith(`/api/changes/${requestId}`, {
@@ -211,8 +262,9 @@ describe("PullRequestFlow", () => {
     render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
 
     await fillValidMetadata(user);
-    await user.click(screen.getByRole("button", { name: "校验变更" }));
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
     await user.click(await screen.findByLabelText("已检查完整 diff"));
+    await user.click(screen.getByRole("button", { name: "下一步：最终确认" }));
     await user.click(screen.getByRole("button", { name: "确认推送并创建 Draft PR" }));
 
     expect(await screen.findByText(copy)).toBeVisible();
@@ -259,8 +311,9 @@ describe("PullRequestFlow", () => {
     render(<PullRequestFlow model={model} draft={draft} onDraftChange={vi.fn()} />);
 
     await fillValidMetadata(user);
-    await user.click(screen.getByRole("button", { name: "校验变更" }));
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
     await user.click(await screen.findByLabelText("已检查完整 diff"));
+    await user.click(screen.getByRole("button", { name: "下一步：最终确认" }));
     await user.click(screen.getByRole("button", { name: "确认推送并创建 Draft PR" }));
 
     expect(await screen.findByText("恢复命令未通过安全检查，已隐藏。")).toBeVisible();
@@ -290,12 +343,14 @@ describe("PullRequestFlow", () => {
     render(<PullRequestFlow model={model} draft={draft} onDraftChange={onDraftChange} />);
 
     await fillValidMetadata(user);
-    await user.click(screen.getByRole("button", { name: "校验变更" }));
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
     await user.click(await screen.findByLabelText("已检查完整 diff"));
+    await user.click(screen.getByRole("button", { name: "下一步：最终确认" }));
     await user.click(screen.getByRole("button", { name: "确认推送并创建 Draft PR" }));
     await user.click(await screen.findByRole("button", { name: "开始新变更" }));
 
     expect(onDraftChange).toHaveBeenCalledWith({
+      newRoles: [],
       rolePermissions: {},
       contractMenus: {},
       contractWidgets: {},

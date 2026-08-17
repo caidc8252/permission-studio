@@ -6,6 +6,12 @@ export interface PrepareIntent {
   baseSha: string;
   title: string;
   reason: string;
+  newRoles: Array<{
+    roleId: number;
+    code: string;
+    names: { en: string; "zh-CN": string; ja: string };
+    permissionCodes: string[];
+  }>;
   roleChanges: Array<{ roleCode: string; add: string[]; remove: string[] }>;
   contractChanges: Array<{
     contractType: string;

@@ -46,7 +46,6 @@ export function ContractModuleEditor({
   return (
     <section className={styles.editor} aria-label="合同模块编辑器">
       <aside className={styles.sidebar} aria-label="可编辑合同">
-        <h2>合同类型</h2>
         <ul className={styles.contractList}>
           {editableContracts.map((contractType) => (
             <li key={contractType}>

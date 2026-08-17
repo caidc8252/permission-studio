@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addNewRole,
   applyDraftToModel,
   buildImpactDiff,
   buildPermissionChange,
@@ -78,6 +79,44 @@ describe("permission drafts", () => {
       model.roles[0]!.permissionCodes,
     );
     expect(baseline.rolePermissions).toEqual({});
+  });
+
+  it("adds a role with initial permissions and includes it in the change protocol", () => {
+    const draft = addNewRole(createEmptyDraft(), model, {
+      roleId: 99,
+      code: "preset_auditor",
+      names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+      permissionCodes: ["orders.view"],
+    });
+    const projected = applyDraftToModel(model, draft);
+
+    expect(projected.roles.find((role) => role.code === "preset_auditor")).toMatchObject({
+      roleId: 99,
+      roleName: "role.presetAuditor",
+      remark: "role.presetAuditorDesc",
+      permissionCodes: ["orders.view"],
+    });
+    expect(projected.translations["zh-CN"]["role.presetAuditor"]).toBe("审计员");
+    expect(projected.translations.en["role.presetAuditor"]).toBe("Auditor");
+    expect(projected.translations.ja["role.presetAuditor"]).toBe("監査担当者");
+    expect(buildImpactDiff(model, draft)).toMatchObject({
+      addedRoles: [expect.objectContaining({ code: "preset_auditor" })],
+      addedRolePermissions: [{ roleCode: "preset_auditor", code: "orders.view" }],
+    });
+    expect(
+      buildPermissionChange(model, draft, {
+        requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
+        title: "chore(permissions): add auditor role",
+        reason: "新增审计角色并分配订单查看权限",
+      }).newRoles,
+    ).toEqual([
+      {
+        roleId: 99,
+        code: "preset_auditor",
+        names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+        permissionCodes: ["orders.view"],
+      },
+    ]);
   });
 
   it("sets a contract owner batch deterministically and removes empty overrides", () => {
@@ -169,6 +208,7 @@ describe("permission drafts", () => {
       baseSha: model.sourceSha,
       title: "chore(permissions): grant report export",
       reason: "为运营角色增加订单管理权限",
+      newRoles: [],
       roleChanges: [
         {
           roleCode: "preset_ops",

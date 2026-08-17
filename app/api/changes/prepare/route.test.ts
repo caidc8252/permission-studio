@@ -9,6 +9,7 @@ const intent = {
   baseSha: validModel.sourceSha,
   title: "chore(permissions): grant report export",
   reason: "为运营角色增加订单查看能力",
+  newRoles: [],
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.manage"], remove: [] }],
   contractChanges: [],
 };
@@ -113,5 +114,32 @@ describe("POST /api/changes/prepare", () => {
         )
       ).status,
     ).toBe(400);
+  });
+
+  it("accepts a unique new role and rejects duplicate code, id, name, and unknown permissions", async () => {
+    const { handler, prepareChange } = setup();
+    const newRole = {
+      roleId: 99,
+      code: "preset_auditor",
+      names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+      permissionCodes: ["orders.view"],
+    };
+    expect(
+      (await handler(request({ ...intent, newRoles: [newRole], roleChanges: [] }))).status,
+    ).toBe(202);
+    expect(prepareChange).toHaveBeenCalledWith(expect.objectContaining({ newRoles: [newRole] }));
+
+    const existingName = validModel.translations["zh-CN"][validModel.roles[0].roleName];
+    for (const duplicate of [
+      { ...newRole, code: validModel.roles[0].code },
+      { ...newRole, roleId: validModel.roles[0].roleId },
+      { ...newRole, names: { ...newRole.names, "zh-CN": existingName } },
+      { ...newRole, permissionCodes: ["missing.permission"] },
+      { ...newRole, roleId: 1000 },
+    ]) {
+      expect(
+        (await handler(request({ ...intent, newRoles: [duplicate], roleChanges: [] }))).status,
+      ).toBe(400);
+    }
   });
 });

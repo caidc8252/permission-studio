@@ -1,41 +1,44 @@
 .editor {
-  display: grid;
-  grid-template-columns: minmax(12rem, 0.22fr) minmax(0, 1fr);
-  gap: 18px;
-}
-
-.sidebar {
+  position: relative;
+  display: flex;
+  height: clamp(36rem, calc(100vh - 15rem), 50rem);
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--surface-border, #d7e0ec);
-  border-radius: 12px;
-  background: var(--surface-subtle, #f7f9fc);
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .sidebar {
-  display: grid;
-  align-self: start;
-  gap: 18px;
-}
-
-.sidebar h2 {
-  margin: 0;
-  font-size: 1rem;
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  right: 12px;
+  max-width: calc(100% - 24px);
+  padding: 5px;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 11px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 6px 20px rgb(15 23 42 / 10%);
+  backdrop-filter: blur(8px);
 }
 
 .contractList {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(7rem, auto));
+  gap: 6px;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
 .contractList button {
-  display: grid;
+  display: flex;
   width: 100%;
-  gap: 2px;
-  text-align: left;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  text-align: center;
 }
 
 .contractList button span {
@@ -49,11 +52,9 @@
 }
 
 .content {
-  display: grid;
+  min-height: 0;
   min-width: 0;
-  align-content: start;
-  gap: 14px;
-  padding: 4px 0 0;
+  flex: 1;
 }
 
 .empty {
@@ -63,17 +64,26 @@
 }
 
 @media (max-width: 920px) {
-  .editor {
-    grid-template-columns: 1fr;
+  .sidebar {
+    top: 66px;
   }
 
   .contractList {
-    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 560px) {
+  .editor {
+    height: auto;
+  }
+
   .sidebar {
-    padding: 12px;
+    left: 12px;
+  }
+
+  .content {
+    height: 34rem;
+    flex: none;
   }
 }

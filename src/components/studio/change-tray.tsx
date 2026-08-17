@@ -17,9 +17,12 @@ export interface ChangeTrayProps {
 function countScenario(impact: ImpactDiff, scenario: string): number {
   const [kind, ownerCode] = scenario.split(":", 2);
   if (kind === "role") {
-    return [...impact.addedRolePermissions, ...impact.removedRolePermissions].filter(
-      (item) => item.roleCode === ownerCode,
-    ).length;
+    return (
+      impact.addedRoles.filter((role) => role.code === ownerCode).length +
+      [...impact.addedRolePermissions, ...impact.removedRolePermissions].filter(
+        (item) => item.roleCode === ownerCode,
+      ).length
+    );
   }
   if (kind === "contract") {
     return [...impact.addedContractOwners, ...impact.removedContractOwners].filter(
@@ -39,7 +42,10 @@ export function ChangeTray({
   reviewDisabled = false,
   generatePrDisabled = false,
 }: ChangeTrayProps) {
-  const additions = impact.addedRolePermissions.length + impact.addedContractOwners.length;
+  const additions =
+    impact.addedRoles.length +
+    impact.addedRolePermissions.length +
+    impact.addedContractOwners.length;
   const removals = impact.removedRolePermissions.length + impact.removedContractOwners.length;
   const total = additions + removals;
   if (!total) return null;

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { normalizePermissionChange, type PermissionChange } from "@/src/domain/change";
 import type { PermissionStudioModel } from "@/src/domain/model";
+import { normalizeNewRole, type NewRoleDraft } from "@/src/domain/new-role";
 import { ChangeJobError, type ChangeJobService } from "@/src/jobs/change-job-service";
 import { changeJobService, remoteModelLoader } from "@/src/server/runtime";
 import { isExpectedMutation } from "@/src/server/request-boundary";
@@ -20,6 +21,20 @@ const prepareIntentSchema = z.strictObject({
     .regex(/^[0-9a-f]+$/),
   title: z.string().max(120),
   reason: z.string().max(500),
+  newRoles: z
+    .array(
+      z.strictObject({
+        roleId: z.number().int().min(1).max(999),
+        code: z.string().min(1).max(200),
+        names: z.strictObject({
+          en: z.string().min(1).max(100),
+          "zh-CN": z.string().min(1).max(100),
+          ja: z.string().min(1).max(100),
+        }),
+        permissionCodes: z.array(z.string().min(1).max(200)).max(2_000),
+      }),
+    )
+    .max(50),
   roleChanges: z
     .array(z.strictObject({ roleCode: z.string().min(1).max(200), ...listChangeSchema.shape }))
     .max(50),
@@ -57,6 +72,10 @@ function validateReferences(model: PermissionStudioModel, change: PermissionChan
       .map((permission) => permission.belongToMenuCode)
       .filter((owner) => !menus.has(owner)),
   );
+  const acceptedNewRoles: NewRoleDraft[] = [];
+  for (const role of change.newRoles) {
+    acceptedNewRoles.push(normalizeNewRole(model, acceptedNewRoles, role));
+  }
   for (const role of change.roleChanges) {
     if (!roles.has(role.roleCode)) throw new Error("unknown role");
     if ([...role.add, ...role.remove].some((code) => !permissions.has(code))) {

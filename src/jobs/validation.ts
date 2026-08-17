@@ -6,6 +6,9 @@ import type { PnpmCommand } from "@/src/system/package-manager";
 export const ALLOWED_CATALOG_PATHS = Object.freeze([
   "apps/web/manifest/catalog/roles.ts",
   "apps/web/manifest/catalog/contract-types.ts",
+  "apps/web/manifest/catalog/i18n/en.ts",
+  "apps/web/manifest/catalog/i18n/zh-CN.ts",
+  "apps/web/manifest/catalog/i18n/ja.ts",
 ]);
 
 export interface ValidationStep {
@@ -90,6 +93,7 @@ export async function runTargetValidation(options: ValidationOptions): Promise<V
         "run",
         "apps/web/manifest/catalog/roles.test.ts",
         "apps/web/manifest/catalog/contract-types.test.ts",
+        "apps/web/manifest/catalog/i18n/i18n.test.ts",
       ],
       300_000,
     ),

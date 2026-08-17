@@ -7,6 +7,7 @@ import {
   type PermissionDraft,
 } from "@/src/domain/draft";
 import type { PermissionStudioModel } from "@/src/domain/model";
+import { validateNewRole, type NewRoleDraft } from "@/src/domain/new-role";
 
 const identifierSchema = z.string().min(1).max(200);
 const identifierArraySchema = z.array(identifierSchema).max(2_000);
@@ -14,7 +15,32 @@ const editableRoleCodeSchema = identifierSchema.regex(/^preset_/);
 const editableContractTypeSchema = identifierSchema.refine((value) => value !== "TEST", {
   message: "TEST is read-only",
 });
+const roleNamesSchema = z.strictObject({
+  en: z.string().min(1).max(100),
+  "zh-CN": z.string().min(1).max(100),
+  ja: z.string().min(1).max(100),
+});
+const newRoleSchema = z.union([
+  z.strictObject({
+    roleId: z.number().int().min(1).max(999),
+    code: editableRoleCodeSchema,
+    names: roleNamesSchema,
+    permissionCodes: identifierArraySchema,
+  }),
+  z
+    .strictObject({
+      roleId: z.number().int().min(1).max(999),
+      code: editableRoleCodeSchema,
+      name: z.string().min(1).max(100),
+      permissionCodes: identifierArraySchema,
+    })
+    .transform(({ name, ...role }) => ({
+      ...role,
+      names: { en: name, "zh-CN": name, ja: name },
+    })),
+]);
 const draftSchema = z.strictObject({
+  newRoles: z.array(newRoleSchema).max(50).default([]),
   rolePermissions: z.record(editableRoleCodeSchema, identifierArraySchema),
   contractMenus: z.record(editableContractTypeSchema, identifierArraySchema),
   contractWidgets: z.record(editableContractTypeSchema, identifierArraySchema),
@@ -128,6 +154,23 @@ export function rebasePermissionDraft(
 ): DraftRebaseResult {
   let rebased = createEmptyDraft();
   const conflicts: DraftConflict[] = [];
+
+  for (const role of draft.newRoles as NewRoleDraft[]) {
+    const permissionCodes = role.permissionCodes.filter((code) => {
+      if (newModel.permissionRegistry[code]) return true;
+      conflicts.push({ kind: "permission", ownerCode: role.code, code });
+      return false;
+    });
+    const errors = validateNewRole(newModel, rebased.newRoles, { ...role, permissionCodes });
+    if (errors.roleId || errors.code || errors.nameEn || errors.nameZhCn || errors.nameJa) {
+      conflicts.push({ kind: "role", ownerCode: role.code, code: role.code });
+      continue;
+    }
+    rebased = {
+      ...rebased,
+      newRoles: [...rebased.newRoles, { ...role, permissionCodes }],
+    };
+  }
 
   for (const [roleCode, oldMembership] of sortedEntries(draft.rolePermissions)) {
     const oldRole = oldModel.roles.find((role) => role.code === roleCode);

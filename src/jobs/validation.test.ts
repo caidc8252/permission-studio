@@ -52,6 +52,9 @@ describe("runTargetValidation", () => {
         "--write",
         "apps/web/manifest/catalog/roles.ts",
         "apps/web/manifest/catalog/contract-types.ts",
+        "apps/web/manifest/catalog/i18n/en.ts",
+        "apps/web/manifest/catalog/i18n/zh-CN.ts",
+        "apps/web/manifest/catalog/i18n/ja.ts",
       ],
       [
         "corepack",
@@ -60,6 +63,7 @@ describe("runTargetValidation", () => {
         "run",
         "apps/web/manifest/catalog/roles.test.ts",
         "apps/web/manifest/catalog/contract-types.test.ts",
+        "apps/web/manifest/catalog/i18n/i18n.test.ts",
       ],
       ["corepack", "pnpm", "typecheck"],
       ["git", "diff", "--check"],

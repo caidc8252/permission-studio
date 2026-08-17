@@ -12,6 +12,7 @@ const change: PermissionChange = {
   baseSha: validModel.sourceSha,
   title: "chore(permissions): grant report export",
   reason: "为运营角色增加订单查看能力",
+  newRoles: [],
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.manage"], remove: [] }],
   contractChanges: [],
 };

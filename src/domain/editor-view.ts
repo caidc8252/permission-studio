@@ -44,7 +44,7 @@ function editableContract(model: PermissionStudioModel, contractType: string): v
   if (contractType === "TEST") throw new Error("TEST is read-only");
 }
 
-function permissionItems(
+export function buildPermissionTransferItems(
   model: PermissionStudioModel,
   permissionCodes: readonly string[],
 ): TransferItem[] {
@@ -78,11 +78,11 @@ export function buildRoleEditorView(
 ): RoleEditorView {
   const role = editableRole(model, roleCode);
   const assignedCodes = new Set(draft.rolePermissions[roleCode] ?? role.permissionCodes);
-  const assigned = permissionItems(
+  const assigned = buildPermissionTransferItems(
     model,
     model.permissionCodes.filter((code) => assignedCodes.has(code)),
   );
-  const available = permissionItems(
+  const available = buildPermissionTransferItems(
     model,
     model.permissionCodes.filter((code) => !assignedCodes.has(code)),
   );

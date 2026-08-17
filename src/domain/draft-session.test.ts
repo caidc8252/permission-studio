@@ -25,6 +25,40 @@ describe("draft sessions", () => {
     expect(restoreDraftSession(raw, "f".repeat(40))).toBeNull();
   });
 
+  it("restores drafts created before new-role support", () => {
+    const raw = JSON.stringify({
+      version: 1,
+      sourceSha: model.sourceSha,
+      draft: { rolePermissions: {}, contractMenus: {}, contractWidgets: {} },
+    });
+
+    expect(restoreDraftSession(raw, model.sourceSha)?.draft).toEqual(createEmptyDraft());
+  });
+
+  it("migrates a legacy single-name role draft to three locale names", () => {
+    const raw = JSON.stringify({
+      version: 1,
+      sourceSha: model.sourceSha,
+      draft: {
+        ...createEmptyDraft(),
+        newRoles: [
+          {
+            roleId: 99,
+            code: "preset_auditor",
+            name: "审计员",
+            permissionCodes: ["orders.view"],
+          },
+        ],
+      },
+    });
+
+    expect(restoreDraftSession(raw, model.sourceSha)?.draft.newRoles[0]?.names).toEqual({
+      en: "审计员",
+      "zh-CN": "审计员",
+      ja: "审计员",
+    });
+  });
+
   it("rejects malformed or non-strict stored drafts", () => {
     expect(restoreDraftSession("not json", model.sourceSha)).toBeNull();
     expect(
@@ -102,7 +136,12 @@ describe("draft sessions", () => {
     nextModel.roles[0]!.permissionCodes = ["orders.manage"];
 
     expect(rebasePermissionDraft(oldModel, nextModel, draft)).toEqual({
-      draft: { rolePermissions: { preset_ops: [] }, contractMenus: {}, contractWidgets: {} },
+      draft: {
+        newRoles: [],
+        rolePermissions: { preset_ops: [] },
+        contractMenus: {},
+        contractWidgets: {},
+      },
       conflicts: [],
     });
   });

@@ -66,10 +66,6 @@ vi.mock("@/src/components/studio/contract-module-graph", () => ({
           搜索模块
           <input type="search" />
         </label>
-        <button type="button">适应画布</button>
-        <button type="button" disabled={disabled}>
-          自动整理
-        </button>
       </section>
     );
   },
@@ -110,7 +106,11 @@ describe("StudioShell", () => {
 
     render(<StudioShell />);
 
-    expect(await screen.findByText(model.sourceSha)).toBeVisible();
+    expect(await screen.findByRole("region", { name: "权限变更工作台" })).toBeVisible();
+    expect(screen.queryByText("PERMISSION STUDIO")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "权限变更工作台" })).not.toBeInTheDocument();
+    expect(screen.queryByText("来源 SHA：", { exact: false })).not.toBeInTheDocument();
+    expect(screen.queryByText(model.sourceSha)).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/api/model", { cache: "no-store" });
   });
 
@@ -171,7 +171,6 @@ describe("StudioShell", () => {
     expect(await screen.findByText("1 项草稿冲突需要处理")).toBeVisible();
     expect(screen.getByText("orders.manage")).toBeVisible();
     expect(screen.getByText("草稿中有 1 项变更")).toBeVisible();
-    expect(screen.getByText(nextModel.sourceSha)).toBeVisible();
     expect(loadModel).toHaveBeenCalledOnce();
     await waitFor(() =>
       expect(window.sessionStorage.getItem(draftStorageKey(nextModel.sourceSha))).toContain(
@@ -234,7 +233,7 @@ describe("StudioShell", () => {
     );
     await user.click(screen.getByRole("button", { name: "刷新 develop" }));
 
-    expect(screen.getByRole("button", { name: "校验中…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "正在校验…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "丢弃全部" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看变更" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "生成 Draft PR" })).toBeDisabled();
@@ -248,7 +247,7 @@ describe("StudioShell", () => {
 
     resolveLoad(nextModel);
 
-    expect(await screen.findByText(nextModel.sourceSha)).toBeVisible();
+    expect(await screen.findByRole("button", { name: "刷新 develop" })).toBeEnabled();
     await user.click(screen.getByRole("tab", { name: "角色权限" }));
     expect(screen.getByRole("searchbox", { name: "搜索角色" })).toBeEnabled();
     expect(screen.getByText("草稿中有 1 项变更")).toBeVisible();
@@ -269,7 +268,7 @@ describe("StudioShell", () => {
     expect(screen.getByRole("tabpanel", { name: "合同模块" })).toBeVisible();
   });
 
-  it("keeps the focused model retry state and source SHA status", async () => {
+  it("keeps the focused model retry state", async () => {
     const user = userEvent.setup();
     const loadModel = vi
       .fn<() => Promise<PermissionStudioModel>>()
@@ -279,7 +278,7 @@ describe("StudioShell", () => {
 
     expect(await screen.findByText("无法加载权限模型")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "重试加载" }));
-    expect(await screen.findByText(model.sourceSha)).toBeVisible();
+    expect(await screen.findByRole("region", { name: "权限变更工作台" })).toBeVisible();
     expect(loadModel).toHaveBeenCalledTimes(2);
   });
 
@@ -309,7 +308,7 @@ describe("StudioShell", () => {
     expect(screen.getByRole("button", { name: "添加已选权限" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "合同模块" }));
     expect(screen.getByRole("checkbox", { name: "启用订单" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "适应画布" })).toBeEnabled();
+    expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
     await user.click(screen.getByRole("tab", { name: "权限模拟" }));
     expect(screen.getByRole("radio", { name: "普通成员" })).toBeEnabled();
     expect(screen.getByText(requestId)).toBeVisible();
@@ -332,8 +331,9 @@ describe("StudioShell", () => {
       screen.getByRole("textbox", { name: "变更原因" }),
       "为运营团队开放订单管理权限",
     );
-    await user.click(screen.getByRole("button", { name: "校验变更" }));
-    expect(screen.getByRole("button", { name: "校验中…" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "下一步：校验与 diff" }));
+    expect(screen.getByRole("heading", { name: "第 2 步：校验与完整 diff" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "下一步：最终确认" })).toBeDisabled();
 
     await user.click(screen.getByRole("tab", { name: "角色权限" }));
 

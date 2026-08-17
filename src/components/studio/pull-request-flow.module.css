@@ -22,6 +22,14 @@
 .steps li[aria-current="step"] {
   color: var(--text, #172033);
   border-color: var(--accent, #2563eb);
+  background: var(--surface, #ffffff);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #2563eb) 12%, transparent);
+}
+
+.steps li[data-completed] {
+  color: var(--accent-strong, #1d4ed8);
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 32%, var(--surface-border, #d7e0ec));
+  background: var(--accent-soft, #eaf2ff);
 }
 
 .stage {
@@ -40,15 +48,6 @@
   margin-bottom: 18px;
 }
 
-.review :global(article) {
-  padding: 14px;
-  margin-top: 12px;
-  border: 1px solid var(--surface-border, #d7e0ec);
-  border-radius: 10px;
-}
-
-.review :global(header),
-.review :global(li),
 .validation li,
 .actions {
   display: flex;
@@ -58,7 +57,6 @@
   gap: 10px;
 }
 
-.review :global(ul),
 .validation {
   display: grid;
   gap: 8px;
@@ -66,13 +64,6 @@
   list-style: none;
 }
 
-.review :global(h3),
-.review :global(h4),
-.review :global(p) {
-  margin-bottom: 6px;
-}
-
-.review :global(code),
 .stage > p code,
 .recovery code {
   overflow-wrap: anywhere;
@@ -148,6 +139,29 @@
 
 .actions {
   justify-content: flex-start;
+}
+
+.stageNavigation {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  margin-top: 18px;
+  border-top: 1px solid var(--surface-border, #d7e0ec);
+}
+
+.next {
+  color: var(--accent-contrast, #ffffff);
+  border-color: var(--accent, #2563eb);
+  background: var(--accent, #2563eb);
+  font-weight: 700;
+}
+
+.next:disabled {
+  color: var(--muted, #64748b);
+  border-color: var(--surface-border, #d7e0ec);
+  background: var(--surface-subtle, #f7f9fc);
 }
 
 .actions p {

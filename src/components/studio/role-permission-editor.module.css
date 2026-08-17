@@ -1,5 +1,6 @@
 .editor {
   display: grid;
+  height: clamp(36rem, calc(100vh - 10rem), 56rem);
   grid-template-columns: minmax(12rem, 0.38fr) minmax(0, 1fr);
   gap: 18px;
 }
@@ -14,8 +15,11 @@
 
 .sidebar {
   display: grid;
+  height: 100%;
   align-content: start;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 14px;
+  overflow: hidden;
 }
 
 .search {
@@ -43,24 +47,52 @@
   font-size: 0.85rem;
 }
 
+.addRole {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--accent-strong, #1d4ed8);
+  border-style: dashed;
+  background: var(--surface, #ffffff);
+  font-weight: 700;
+}
+
 .roleList {
   display: grid;
+  min-height: 0;
   gap: 7px;
   padding: 0;
   margin: 0;
+  overflow-y: auto;
   list-style: none;
+  scrollbar-gutter: stable;
 }
 
 .roleList button {
   display: flex;
   width: 100%;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   text-align: left;
 }
 
-.roleList button span {
+.roleIdentity {
+  display: grid;
+  gap: 2px;
   min-width: 0;
+}
+
+.roleIdentity > span {
+  overflow-wrap: anywhere;
+}
+
+.roleIdentity code {
+  color: var(--muted, #64748b);
+  font-size: 0.72rem;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
@@ -80,7 +112,8 @@
 .content {
   display: grid;
   min-width: 0;
-  align-content: start;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
   padding: 4px 0 0;
 }
@@ -115,6 +148,7 @@
 
 @media (max-width: 760px) {
   .editor {
+    height: auto;
     grid-template-columns: 1fr;
   }
 
@@ -124,5 +158,13 @@
 
   .heading label {
     min-width: 0;
+  }
+
+  .sidebar {
+    max-height: none;
+  }
+
+  .roleList {
+    max-height: 20rem;
   }
 }

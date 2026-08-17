@@ -10,6 +10,7 @@ import { ChangeTray } from "@/src/components/studio/change-tray";
 import type { ImpactDiff } from "@/src/domain/draft";
 
 const impactAcrossThreeObjects: ImpactDiff = {
+  addedRoles: [],
   addedRolePermissions: [
     { roleCode: "preset_ops", code: "orders.manage" },
     { roleCode: "preset_support", code: "orders.view" },
@@ -77,6 +78,7 @@ describe("ChangeTray", () => {
     render(
       <ChangeTray
         impact={{
+          addedRoles: [],
           addedRolePermissions: [],
           removedRolePermissions: [],
           addedContractOwners: [],

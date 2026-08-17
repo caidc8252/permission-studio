@@ -71,4 +71,41 @@ describe("applyPermissionChange", () => {
     expect(readFileSync(join(catalog, "roles.ts"), "utf8")).toBe(snapshot[0]);
     expect(readFileSync(join(catalog, "contract-types.ts"), "utf8")).toBe(snapshot[1]);
   });
+
+  it("adds a role and all locale entries atomically and idempotently", async () => {
+    const { root, catalog } = targetFixture();
+    const change = {
+      newRoles: [
+        {
+          roleId: 99,
+          code: "preset_auditor",
+          names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+          permissionCodes: ["orders.view"],
+        },
+      ],
+      roleChanges: [],
+      contractChanges: [],
+    };
+
+    const first = await applyPermissionChange(root, change);
+    const second = await applyPermissionChange(root, change);
+
+    expect(first.touchedFiles).toEqual([
+      "apps/web/manifest/catalog/roles.ts",
+      "apps/web/manifest/catalog/i18n/en.ts",
+      "apps/web/manifest/catalog/i18n/zh-CN.ts",
+      "apps/web/manifest/catalog/i18n/ja.ts",
+    ]);
+    expect(second.touchedFiles).toEqual([]);
+    expect(readFileSync(join(catalog, "roles.ts"), "utf8")).toMatch(/"?code"?: "preset_auditor"/u);
+    for (const [locale, name] of [
+      ["en", "Auditor"],
+      ["zh-CN", "审计员"],
+      ["ja", "監査担当者"],
+    ]) {
+      expect(readFileSync(join(catalog, "i18n", `${locale}.ts`), "utf8")).toContain(
+        `presetAuditor: "${name}"`,
+      );
+    }
+  });
 });

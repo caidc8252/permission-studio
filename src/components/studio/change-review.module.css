@@ -1,0 +1,283 @@
+.review {
+  --review-success: #0f7b57;
+  --review-success-soft: #ecfdf5;
+  display: grid;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  gap: 18px;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 24px;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-left: 4px solid var(--accent, #2563eb);
+  border-radius: 16px;
+  background: var(--surface, #ffffff);
+  box-shadow: 0 12px 32px rgb(30 64 175 / 8%);
+}
+
+.summaryCopy {
+  display: grid;
+  gap: 5px;
+}
+
+.eyebrow {
+  color: var(--accent-strong, #1d4ed8);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.summary h2,
+.summary p,
+.card h3,
+.changeList h4 {
+  margin: 0;
+}
+
+.summary h2 {
+  font-size: clamp(1.35rem, 2vw, 1.7rem);
+  letter-spacing: -0.025em;
+}
+
+.summaryText {
+  color: var(--muted, #64748b);
+  font-size: 0.9rem;
+}
+
+.summaryText strong {
+  color: var(--text, #172033);
+  font-size: 1.1rem;
+}
+
+.resetAll,
+.undoGroup,
+.undoItem {
+  flex: 0 0 auto;
+  background: var(--surface, #ffffff);
+}
+
+.resetAll {
+  color: var(--danger, #b42318);
+  border-color: color-mix(in srgb, var(--danger, #b42318) 30%, var(--surface-border, #d7e0ec));
+}
+
+.cards {
+  display: grid;
+  gap: 14px;
+}
+
+.card {
+  overflow: hidden;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 16px;
+  background: var(--surface, #ffffff);
+  box-shadow: 0 8px 24px rgb(15 23 42 / 5%);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--surface-border, #d7e0ec);
+  background: var(--surface-subtle, #f7f9fc);
+}
+
+.entity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.entityKind {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  color: var(--accent-strong, #1d4ed8);
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 22%, transparent);
+  border-radius: 999px;
+  background: var(--accent-soft, #eaf2ff);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.entityIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.entityIdentity h3 {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.entityIdentity code,
+.itemCopy code {
+  color: var(--muted, #64748b);
+  font-family: var(--font-mono), "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.entityIdentity code {
+  font-size: 0.72rem;
+}
+
+.roleTranslations {
+  color: var(--muted, #64748b);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.undoGroup {
+  padding: 7px 10px;
+  color: var(--muted, #64748b);
+  font-size: 0.78rem;
+}
+
+.changeLists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 25rem), 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.changeList {
+  overflow: hidden;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 12px;
+}
+
+.changeList h4 {
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--surface-border, #d7e0ec);
+  font-size: 0.8rem;
+}
+
+.changeList[data-tone="added"] h4 {
+  color: var(--review-success);
+  background: var(--review-success-soft);
+}
+
+.changeList[data-tone="removed"] h4 {
+  color: var(--danger, #b42318);
+  background: var(--danger-soft, #fff1f0);
+}
+
+.items {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.changeItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 11px 12px;
+}
+
+.changeItem + .changeItem {
+  border-top: 1px solid color-mix(in srgb, var(--surface-border, #d7e0ec) 72%, transparent);
+}
+
+.marker {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 7px;
+  font-family: var(--font-mono), "SFMono-Regular", Consolas, monospace;
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.changeList[data-tone="added"] .marker {
+  color: var(--review-success);
+  background: var(--review-success-soft);
+}
+
+.changeList[data-tone="removed"] .marker {
+  color: var(--danger, #b42318);
+  background: var(--danger-soft, #fff1f0);
+}
+
+.itemCopy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.itemCopy strong {
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.itemCopy code {
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.undoItem {
+  padding: 6px 9px;
+  color: var(--muted, #64748b);
+  font-size: 0.74rem;
+}
+
+.undoGroup:hover:not(:disabled),
+.undoItem:hover:not(:disabled) {
+  color: var(--danger, #b42318);
+  border-color: color-mix(in srgb, var(--danger, #b42318) 30%, var(--surface-border, #d7e0ec));
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 48px 24px;
+  color: var(--muted, #64748b);
+  border: 1px dashed var(--surface-border, #d7e0ec);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface, #ffffff) 55%, transparent);
+  text-align: center;
+}
+
+.emptyState strong {
+  color: var(--text, #172033);
+}
+
+@media (max-width: 640px) {
+  .summary,
+  .cardHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resetAll,
+  .undoGroup {
+    width: 100%;
+  }
+
+  .changeLists {
+    padding: 12px;
+  }
+
+  .changeItem {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .undoItem {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

@@ -15,6 +15,7 @@ const intent: PrepareIntent = {
   baseSha: validModel.sourceSha,
   title: "chore(permissions): grant report export",
   reason: "允许运营角色导出报表数据",
+  newRoles: [],
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.manage"], remove: [] }],
   contractChanges: [],
 };

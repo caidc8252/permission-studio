@@ -7,9 +7,13 @@ import {
   type TransferLabels,
   type TransferRequest,
 } from "@/src/components/studio/dual-list-editor";
+import { NewRoleForm } from "@/src/components/studio/new-role-form";
 import styles from "@/src/components/studio/role-permission-editor.module.css";
 import {
   buildImpactDiff,
+  applyDraftToModel,
+  createEmptyDraft,
+  setNewRolePermissionMembership,
   setRolePermissionMembership,
   type PermissionDraft,
 } from "@/src/domain/draft";
@@ -56,9 +60,10 @@ export function RolePermissionEditor({
   onDraftChange,
 }: RolePermissionEditorProps) {
   const editableRoles = useMemo(
-    () => model.roles.filter((role) => isEditableRole(role.code)),
-    [model.roles],
+    () => applyDraftToModel(model, draft).roles.filter((role) => isEditableRole(role.code)),
+    [draft, model],
   );
+  const projectedModel = useMemo(() => applyDraftToModel(model, draft), [draft, model]);
   const firstRoleCode = editableRoles[0]?.code ?? "";
   const [selectedRoleCode, setSelectedRoleCode] = useState(() =>
     editableRoles.some((role) => role.code === initialRoleCode) ? initialRoleCode! : firstRoleCode,
@@ -66,6 +71,8 @@ export function RolePermissionEditor({
   const [roleQuery, setRoleQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [changesOnly, setChangesOnly] = useState(false);
+  const [creatingRole, setCreatingRole] = useState(false);
+  const [pendingRoleCode, setPendingRoleCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (editableRoles.some((role) => role.code === initialRoleCode)) {
@@ -75,12 +82,20 @@ export function RolePermissionEditor({
     }
   }, [editableRoles, firstRoleCode, initialRoleCode, selectedRoleCode]);
 
+  useEffect(() => {
+    if (!pendingRoleCode || !editableRoles.some((role) => role.code === pendingRoleCode)) return;
+    setSelectedRoleCode(pendingRoleCode);
+    onSelectedRoleCodeChange?.(pendingRoleCode);
+    setPendingRoleCode(null);
+  }, [editableRoles, onSelectedRoleCodeChange, pendingRoleCode]);
+
   const roleImpacts = useMemo(() => {
     const impact = buildImpactDiff(model, draft);
     return new Map(
       editableRoles.map((role) => [
         role.code,
-        impact.addedRolePermissions.filter((item) => item.roleCode === role.code).length +
+        impact.addedRoles.filter((item) => item.code === role.code).length +
+          impact.addedRolePermissions.filter((item) => item.roleCode === role.code).length +
           impact.removedRolePermissions.filter((item) => item.roleCode === role.code).length,
       ]),
     );
@@ -92,13 +107,15 @@ export function RolePermissionEditor({
       !normalizedRoleQuery ||
       [
         role.code,
-        translated(model, role.roleName, role.code),
-        translated(model, role.remark, role.code),
+        translated(projectedModel, role.roleName, role.code),
+        translated(projectedModel, role.remark, role.code),
       ].some((value) => value.toLocaleLowerCase().includes(normalizedRoleQuery));
     return matchesQuery && (!changesOnly || (roleImpacts.get(role.code) ?? 0) > 0);
   });
 
-  const view = selectedRoleCode ? buildRoleEditorView(model, draft, selectedRoleCode) : null;
+  const view = selectedRoleCode
+    ? buildRoleEditorView(projectedModel, createEmptyDraft(), selectedRoleCode)
+    : null;
   const groups = useMemo(
     () =>
       [
@@ -119,7 +136,11 @@ export function RolePermissionEditor({
       if (request.direction === "assign") assigned.add(id);
       else assigned.delete(id);
     }
-    onDraftChange(setRolePermissionMembership(draft, model, view.roleCode, [...assigned]));
+    onDraftChange(
+      draft.newRoles.some((role) => role.code === view.roleCode)
+        ? setNewRolePermissionMembership(draft, model, view.roleCode, [...assigned])
+        : setRolePermissionMembership(draft, model, view.roleCode, [...assigned]),
+    );
   };
 
   return (
@@ -143,21 +164,30 @@ export function RolePermissionEditor({
           />
           仅显示有变更的角色
         </label>
+        <button className={styles.addRole} type="button" onClick={() => setCreatingRole(true)}>
+          <span aria-hidden="true">＋</span>
+          新增角色
+        </button>
         <ul className={styles.roleList}>
           {sidebarRoles.map((role) => {
-            const label = translated(model, role.roleName, role.code);
+            const label = translated(projectedModel, role.roleName, role.code);
             const count = roleImpacts.get(role.code) ?? 0;
             return (
               <li key={role.code}>
                 <button
                   type="button"
+                  aria-label={`${label}（${role.code}）`}
                   aria-pressed={role.code === selectedRoleCode}
                   onClick={() => {
+                    setCreatingRole(false);
                     setSelectedRoleCode(role.code);
                     onSelectedRoleCodeChange?.(role.code);
                   }}
                 >
-                  <span>{label}</span>
+                  <span className={styles.roleIdentity}>
+                    <span>{label}</span>
+                    <code>{role.code}</code>
+                  </span>
                   {count ? <small>{count}</small> : null}
                 </button>
               </li>
@@ -202,6 +232,19 @@ export function RolePermissionEditor({
           <p className={styles.empty}>没有可编辑的预设角色</p>
         )}
       </div>
+
+      {creatingRole ? (
+        <NewRoleForm
+          model={model}
+          draft={draft}
+          onDraftChange={onDraftChange}
+          onCancel={() => setCreatingRole(false)}
+          onCreated={(roleCode) => {
+            setCreatingRole(false);
+            setPendingRoleCode(roleCode);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

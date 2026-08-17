@@ -1,13 +1,21 @@
 import { normalizePermissionChange, type PermissionChange } from "@/src/domain/change";
 import type { PermissionStudioModel } from "@/src/domain/model";
+import {
+  normalizeNewRole,
+  roleI18nStem,
+  type NewRoleDraft,
+  type NewRoleInput,
+} from "@/src/domain/new-role";
 
 export interface PermissionDraft {
+  newRoles: NewRoleDraft[];
   rolePermissions: Record<string, string[]>;
   contractMenus: Record<string, string[]>;
   contractWidgets: Record<string, string[]>;
 }
 
 export interface ImpactDiff {
+  addedRoles: NewRoleDraft[];
   addedRolePermissions: Array<{ roleCode: string; code: string }>;
   removedRolePermissions: Array<{ roleCode: string; code: string }>;
   addedContractOwners: Array<{
@@ -86,9 +94,41 @@ function differences(
 
 export function createEmptyDraft(): PermissionDraft {
   return {
+    newRoles: [],
     rolePermissions: {},
     contractMenus: {},
     contractWidgets: {},
+  };
+}
+
+export function addNewRole(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  input: NewRoleInput,
+): PermissionDraft {
+  const role = normalizeNewRole(model, draft.newRoles, input);
+  return {
+    ...draft,
+    newRoles: [...draft.newRoles, role].sort((left, right) => left.roleId - right.roleId),
+  };
+}
+
+export function setNewRolePermissionMembership(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  roleCode: string,
+  permissionCodes: readonly string[],
+): PermissionDraft {
+  const role = draft.newRoles.find((candidate) => candidate.code === roleCode);
+  if (!role) throw new Error(`Unknown new role "${roleCode}"`);
+  const permissions = new Set(model.permissionCodes);
+  const next = sortedUnique(permissionCodes);
+  if (next.some((code) => !permissions.has(code))) throw new Error("Unknown permission");
+  return {
+    ...draft,
+    newRoles: draft.newRoles.map((candidate) =>
+      candidate.code === roleCode ? { ...candidate, permissionCodes: next } : candidate,
+    ),
   };
 }
 
@@ -131,7 +171,11 @@ export function setContractOwnerMembership(
 export function discardRoleDraft(draft: PermissionDraft, roleCode: string): PermissionDraft {
   const rolePermissions = { ...draft.rolePermissions };
   delete rolePermissions[roleCode];
-  return { ...draft, rolePermissions };
+  return {
+    ...draft,
+    newRoles: draft.newRoles.filter((role) => role.code !== roleCode),
+    rolePermissions,
+  };
 }
 
 export function discardContractDraft(
@@ -155,6 +199,18 @@ export function discardDraftItem(
   item: DraftItemRef,
 ): PermissionDraft {
   if (item.kind === "permission") {
+    const newRole = draft.newRoles.find((role) => role.code === item.ownerCode);
+    if (newRole) {
+      if (!model.permissionRegistry[item.code]) {
+        throw new Error(`Unknown permission "${item.code}"`);
+      }
+      return setNewRolePermissionMembership(
+        draft,
+        model,
+        item.ownerCode,
+        newRole.permissionCodes.filter((code) => code !== item.code),
+      );
+    }
     const role = editableRole(model, item.ownerCode);
     if (!model.permissionRegistry[item.code]) {
       throw new Error(`Unknown permission "${item.code}"`);
@@ -210,12 +266,40 @@ export function applyDraftToModel(
   model: PermissionStudioModel,
   draft: PermissionDraft,
 ): PermissionStudioModel {
+  const newRoles = draft.newRoles.map((role) => {
+    const stem = roleI18nStem(role.code);
+    return {
+      roleId: role.roleId,
+      code: role.code,
+      roleName: `role.${stem}`,
+      remark: `role.${stem}Desc`,
+      permissionCodes: role.permissionCodes,
+    };
+  });
+  const translationEntries = (locale: "en" | "zh-CN" | "ja") =>
+    Object.fromEntries(
+      draft.newRoles.flatMap((role) => {
+        const stem = roleI18nStem(role.code);
+        return [
+          [`role.${stem}`, role.names[locale]],
+          [`role.${stem}Desc`, role.names[locale]],
+        ];
+      }),
+    );
   return {
     ...model,
-    roles: model.roles.map((role) => ({
-      ...role,
-      permissionCodes: draft.rolePermissions[role.code] ?? role.permissionCodes,
-    })),
+    roles: [
+      ...model.roles.map((role) => ({
+        ...role,
+        permissionCodes: draft.rolePermissions[role.code] ?? role.permissionCodes,
+      })),
+      ...newRoles,
+    ].sort((left, right) => left.code.localeCompare(right.code)),
+    translations: {
+      en: { ...model.translations.en, ...translationEntries("en") },
+      "zh-CN": { ...model.translations["zh-CN"], ...translationEntries("zh-CN") },
+      ja: { ...model.translations.ja, ...translationEntries("ja") },
+    },
     contractMenus: {
       ...model.contractMenus,
       ...draft.contractMenus,
@@ -229,12 +313,19 @@ export function applyDraftToModel(
 
 export function buildImpactDiff(model: PermissionStudioModel, draft: PermissionDraft): ImpactDiff {
   const impact: ImpactDiff = {
+    addedRoles: [...draft.newRoles],
     addedRolePermissions: [],
     removedRolePermissions: [],
     addedContractOwners: [],
     removedContractOwners: [],
     scenarios: [],
   };
+
+  for (const role of draft.newRoles) {
+    impact.addedRolePermissions.push(
+      ...role.permissionCodes.map((code) => ({ roleCode: role.code, code })),
+    );
+  }
 
   for (const [roleCode, codes] of Object.entries(draft.rolePermissions)) {
     const role = model.roles.find((candidate) => candidate.code === roleCode);
@@ -256,6 +347,7 @@ export function buildImpactDiff(model: PermissionStudioModel, draft: PermissionD
   }
 
   const scenarios = new Set<string>();
+  for (const role of impact.addedRoles) scenarios.add(`role:${role.code}`);
   for (const item of [...impact.addedRolePermissions, ...impact.removedRolePermissions]) {
     scenarios.add(`role:${item.roleCode}`);
   }
@@ -301,6 +393,7 @@ export function buildPermissionChange(
     baseSha: model.sourceSha,
     title: metadata.title,
     reason: metadata.reason,
+    newRoles: draft.newRoles,
     roleChanges,
     contractChanges,
   });

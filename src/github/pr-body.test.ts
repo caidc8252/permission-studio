@@ -9,6 +9,7 @@ const change: PermissionChange = {
   baseSha: "0123456789abcdef0123456789abcdef01234567",
   title: "chore(permissions): grant report export",
   reason: "为 <运营&支持> 增加订单 | 查看能力",
+  newRoles: [],
   roleChanges: [{ roleCode: "preset_ops", add: ["orders.view"], remove: [] }],
   contractChanges: [
     {
@@ -52,5 +53,28 @@ describe("buildPullRequestBody", () => {
         validationSteps: [{ name: "typecheck", status: "passed", durationMs: 123 }],
       }),
     ).toBe(body);
+  });
+
+  it("includes new role identity and initial permissions", () => {
+    const body = buildPullRequestBody({
+      change: {
+        ...change,
+        newRoles: [
+          {
+            roleId: 99,
+            code: "preset_auditor",
+            names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+            permissionCodes: ["orders.view"],
+          },
+        ],
+      },
+      actor: "operator",
+      touchedFiles: ["apps/web/manifest/catalog/roles.ts"],
+      validationSteps: [],
+    });
+
+    expect(body).toContain(
+      "| 99 | `preset_auditor` | 审计员 | Auditor | 監査担当者 | `orders.view` |",
+    );
   });
 });

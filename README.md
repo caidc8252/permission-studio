@@ -53,7 +53,7 @@ corepack pnpm dev
 - 浏览器不能选择仓库、base、分支名、request ID 或文件路径。
 - 命令通过参数数组执行，不使用 shell 拼接；输出有大小和超时限制，并会遮蔽常见 token 格式。
 - AST 编辑器只接受静态、已知的角色/契约数组；动态或计算属性会 fail closed。
-- Git 只 stage `roles.ts` 和 `contract-types.ts` 两个允许文件；远端写入前必须通过格式化、目录测试、类型检查和 `git diff --check`。
+- Git 只 stage `roles.ts`、`contract-types.ts` 和三份角色 i18n 目录文件；远端写入前必须通过格式化、目录测试、类型检查和 `git diff --check`。
 - `TEST` 契约和非 `preset_` 角色只读。
 
 ## 验证

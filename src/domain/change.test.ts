@@ -8,6 +8,7 @@ const validChange = {
   baseSha: "0123456789abcdef0123456789abcdef01234567",
   title: "chore(permissions): update permission catalogs",
   reason: "为运营角色增加订单查看能力",
+  newRoles: [],
   roleChanges: [
     {
       roleCode: "preset_ops",
@@ -61,6 +62,64 @@ describe("permission change protocol", () => {
         },
       ],
     });
+  });
+
+  it("normalizes new roles and rejects duplicate identities", () => {
+    expect(
+      normalizePermissionChange({
+        ...validChange,
+        newRoles: [
+          {
+            roleId: 99,
+            code: "preset_auditor",
+            names: { en: " Auditor ", "zh-CN": "  审计员  ", ja: " 監査担当者 " },
+            permissionCodes: ["orders.view", "orders.view"],
+          },
+        ],
+        roleChanges: [],
+      }).newRoles,
+    ).toEqual([
+      {
+        roleId: 99,
+        code: "preset_auditor",
+        names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+        permissionCodes: ["orders.view"],
+      },
+    ]);
+
+    for (const duplicate of [
+      {
+        roleId: 99,
+        code: "preset_other",
+        names: { en: "Other", "zh-CN": "其他", ja: "その他" },
+      },
+      {
+        roleId: 100,
+        code: "preset_auditor",
+        names: { en: "Other", "zh-CN": "其他", ja: "その他" },
+      },
+      {
+        roleId: 100,
+        code: "preset_other",
+        names: { en: "Auditor", "zh-CN": "其他", ja: "その他" },
+      },
+    ]) {
+      expect(() =>
+        normalizePermissionChange({
+          ...validChange,
+          newRoles: [
+            {
+              roleId: 99,
+              code: "preset_auditor",
+              names: { en: "Auditor", "zh-CN": "审计员", ja: "監査担当者" },
+              permissionCodes: [],
+            },
+            { ...duplicate, permissionCodes: [] },
+          ],
+          roleChanges: [],
+        }),
+      ).toThrow(/duplicate new role/i);
+    }
   });
 
   it("rejects conflicts, duplicate owners, and empty final changes", () => {

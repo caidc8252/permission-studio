@@ -36,10 +36,6 @@ vi.mock("@/src/components/studio/contract-module-graph", () => ({
         搜索模块
         <input type="search" />
       </label>
-      <button type="button">适应画布</button>
-      <button type="button" disabled={disabled}>
-        自动整理
-      </button>
     </section>
   ),
 }));
@@ -107,7 +103,7 @@ describe("ContractModuleEditor", () => {
     expect(screen.queryByRole("button", { name: "TEST" })).not.toBeInTheDocument();
   });
 
-  it("locks graph mutations while leaving its view controls available", () => {
+  it("locks graph mutations while leaving search available", () => {
     render(
       <ContractModuleEditor
         model={model}
@@ -118,8 +114,8 @@ describe("ContractModuleEditor", () => {
     );
 
     expect(screen.getByRole("checkbox", { name: "图中订单" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "自动整理" })).toBeDisabled();
     expect(screen.getByRole("searchbox", { name: "搜索模块" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "适应画布" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "适应画布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "自动整理" })).not.toBeInTheDocument();
   });
 });

@@ -3,11 +3,19 @@ import process from "node:process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { applySourceEdits, planSourceEdits } from "./source-editor.mjs";
+import {
+  applySourceEdits,
+  planNewRoleEdit,
+  planRoleTranslationEdit,
+  planSourceEdits,
+} from "./source-editor.mjs";
 
 export const ALLOWED_CATALOG_PATHS = Object.freeze([
   "apps/web/manifest/catalog/roles.ts",
   "apps/web/manifest/catalog/contract-types.ts",
+  "apps/web/manifest/catalog/i18n/en.ts",
+  "apps/web/manifest/catalog/i18n/zh-CN.ts",
+  "apps/web/manifest/catalog/i18n/ja.ts",
 ]);
 
 async function atomicWrite(files) {
@@ -42,12 +50,29 @@ export async function applyPermissionChange(worktreePath, change) {
   const root = resolve(worktreePath);
   const rolesPath = join(root, ...ALLOWED_CATALOG_PATHS[0].split("/"));
   const contractsPath = join(root, ...ALLOWED_CATALOG_PATHS[1].split("/"));
-  const [originalRoles, originalContracts] = await Promise.all([
+  const translationPaths = ALLOWED_CATALOG_PATHS.slice(2).map((path) =>
+    join(root, ...path.split("/")),
+  );
+  const [originalRoles, originalContracts, ...originalTranslations] = await Promise.all([
     readFile(rolesPath, "utf8"),
     readFile(contractsPath, "utf8"),
+    ...translationPaths.map((path) => readFile(path, "utf8")),
   ]);
   let roles = originalRoles;
   let contracts = originalContracts;
+  const translations = [...originalTranslations];
+  const locales = ["en", "zh-CN", "ja"];
+
+  for (const role of change.newRoles ?? []) {
+    roles = applySourceEdits(roles, planNewRoleEdit(roles, role));
+    const stem = role.code.replace(/_(.)/gu, (_, character) => character.toUpperCase());
+    for (const [index, source] of translations.entries()) {
+      translations[index] = applySourceEdits(
+        source,
+        planRoleTranslationEdit(source, stem, role.names[locales[index]]),
+      );
+    }
+  }
 
   for (const role of change.roleChanges ?? []) {
     roles = applyRequest(roles, {
@@ -90,6 +115,12 @@ export async function applyPermissionChange(worktreePath, change) {
       content: contracts,
       relativePath: ALLOWED_CATALOG_PATHS[1],
     },
+    ...translations.map((content, index) => ({
+      path: translationPaths[index],
+      original: originalTranslations[index],
+      content,
+      relativePath: ALLOWED_CATALOG_PATHS[index + 2],
+    })),
   ].filter((file) => file.original !== file.content);
   if (files.length) await atomicWrite(files);
   return { touchedFiles: files.map(({ relativePath }) => relativePath) };

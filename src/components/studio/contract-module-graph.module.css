@@ -168,7 +168,9 @@
 }
 
 .graphShell {
+  height: 100%;
   min-width: 0;
+  min-height: 0;
 }
 
 .canvasToolbar {
@@ -179,13 +181,12 @@
   left: 12px;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   pointer-events: none;
 }
 
-.searchControl,
-.toolbarActions {
+.searchControl {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -220,33 +221,16 @@
   white-space: nowrap;
 }
 
-.toolbarActions {
-  padding: 5px;
-  border: 1px solid var(--surface-border, #d7e0ec);
-  border-radius: 11px;
-  background: rgb(255 255 255 / 94%);
-  box-shadow: 0 6px 20px rgb(15 23 42 / 10%);
-  backdrop-filter: blur(8px);
-}
-
-.toolbarActions button,
 .searchControl button {
   padding: 7px 10px;
   background: #fff;
   white-space: nowrap;
 }
 
-.lockedBadge {
-  padding: 0 6px;
-  color: var(--warning, #9a5b08);
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
 .canvas {
   position: relative;
   width: 100%;
-  height: min(66vh, 680px);
+  height: 100%;
   min-height: 480px;
   overflow: hidden;
   border: 1px solid var(--surface-border, #d7e0ec);
@@ -288,12 +272,8 @@
     flex: 1;
   }
 
-  .toolbarActions {
-    align-self: flex-end;
-  }
-
   .canvas {
-    height: 34rem;
+    height: 100%;
     min-height: 28rem;
   }
 }
