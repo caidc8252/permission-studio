@@ -53,7 +53,12 @@ vi.mock("@/src/components/studio/contract-module-graph", () => ({
 import { StudioShell } from "@/src/components/studio/studio-shell";
 import { ACTIVE_CHANGE_JOB_KEY } from "@/src/components/studio/use-change-job";
 import { createEmptyDraft, setRolePermissionMembership } from "@/src/domain/draft";
-import { draftStorageKey, serializeDraftSession } from "@/src/domain/draft-session";
+import {
+  ACTIVE_DRAFT_STORAGE_KEY,
+  createDraftBaseline,
+  draftStorageKey,
+  serializeDraftSession,
+} from "@/src/domain/draft-session";
 import type { PermissionStudioModel } from "@/src/domain/model";
 import { validModel } from "@/tests/fixtures/model";
 
@@ -141,6 +146,73 @@ describe("StudioShell", () => {
       expect(
         JSON.parse(window.localStorage.getItem(draftStorageKey(model.sourceSha)) ?? "{}"),
       ).toMatchObject({ draft: storedDraft }),
+    );
+  });
+
+  it("rebases the active draft when a browser reload receives a new source SHA", async () => {
+    const storedDraft = setRolePermissionMembership(createEmptyDraft(), model, "preset_ops", [
+      "orders.manage",
+      "orders.view",
+    ]);
+    const serialized = serializeDraftSession({
+      version: 1,
+      sourceSha: model.sourceSha,
+      draft: storedDraft,
+      baseline: createDraftBaseline(model),
+    });
+    window.localStorage.setItem(draftStorageKey(model.sourceSha), serialized);
+    window.localStorage.setItem(ACTIVE_DRAFT_STORAGE_KEY, serialized);
+    const nextModel = structuredClone(model);
+    nextModel.sourceSha = "f".repeat(40);
+
+    render(<StudioShell initialModel={nextModel} loadModel={vi.fn()} />);
+
+    expect(await screen.findByText("草稿中有 1 项变更")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.localStorage.getItem(ACTIVE_DRAFT_STORAGE_KEY) ?? "{}"),
+      ).toMatchObject({
+        sourceSha: nextModel.sourceSha,
+        draft: { rolePermissions: { preset_ops: ["orders.manage", "orders.view"] } },
+      }),
+    );
+    expect(window.localStorage.getItem(draftStorageKey(nextModel.sourceSha))).toContain(
+      nextModel.sourceSha,
+    );
+  });
+
+  it("keeps cross-SHA rebase conflicts active instead of replacing them with an empty draft", async () => {
+    const storedDraft = setRolePermissionMembership(createEmptyDraft(), model, "preset_ops", [
+      "orders.manage",
+      "orders.view",
+    ]);
+    window.localStorage.setItem(
+      ACTIVE_DRAFT_STORAGE_KEY,
+      serializeDraftSession({
+        version: 1,
+        sourceSha: model.sourceSha,
+        draft: storedDraft,
+        baseline: createDraftBaseline(model),
+      }),
+    );
+    const nextModel = structuredClone(model);
+    nextModel.sourceSha = "e".repeat(40);
+    delete nextModel.permissionRegistry["orders.manage"];
+    nextModel.permissionCodes = nextModel.permissionCodes.filter(
+      (code) => code !== "orders.manage",
+    );
+
+    render(<StudioShell initialModel={nextModel} loadModel={vi.fn()} />);
+
+    expect(await screen.findByText("1 项草稿冲突需要处理")).toBeVisible();
+    expect(screen.getByText("orders.manage")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.localStorage.getItem(ACTIVE_DRAFT_STORAGE_KEY) ?? "{}"),
+      ).toMatchObject({
+        sourceSha: nextModel.sourceSha,
+        conflicts: [{ kind: "permission", ownerCode: "preset_ops", code: "orders.manage" }],
+      }),
     );
   });
 

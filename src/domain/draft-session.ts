@@ -61,16 +61,40 @@ const sourceShaSchema = z
   .string()
   .length(40)
   .regex(/^[0-9a-f]+$/);
+const draftBaselineSchema = z.strictObject({
+  rolePermissions: z.record(editableRoleCodeSchema, identifierArraySchema),
+  contractTypes: identifierArraySchema,
+  contractMenus: z.record(identifierSchema, identifierArraySchema),
+  contractWidgets: z.record(identifierSchema, identifierArraySchema),
+});
+const draftConflictSchema = z.strictObject({
+  kind: z.enum(["role", "permission", "contract", "menu", "widget"]),
+  ownerCode: identifierSchema,
+  code: identifierSchema,
+});
 const storedDraftSchema = z.strictObject({
   version: z.literal(1),
   sourceSha: sourceShaSchema,
   draft: draftSchema,
+  baseline: draftBaselineSchema.optional(),
+  conflicts: z.array(draftConflictSchema).max(2_000).optional(),
 });
+
+export const ACTIVE_DRAFT_STORAGE_KEY = "permission-studio:active-draft";
+
+export interface DraftBaseline {
+  rolePermissions: Record<string, string[]>;
+  contractTypes: string[];
+  contractMenus: Record<string, string[]>;
+  contractWidgets: Record<string, string[]>;
+}
 
 export interface StoredDraft {
   version: 1;
   sourceSha: string;
   draft: PermissionDraft;
+  baseline?: DraftBaseline;
+  conflicts?: DraftConflict[];
 }
 
 export interface DraftConflict {
@@ -92,15 +116,55 @@ export function serializeDraftSession(stored: StoredDraft): string {
   return JSON.stringify(storedDraftSchema.parse(stored));
 }
 
-export function restoreDraftSession(raw: string | null, expectedSha: string): StoredDraft | null {
-  if (!raw || !sourceShaSchema.safeParse(expectedSha).success) return null;
+export function parseDraftSession(raw: string | null): StoredDraft | null {
+  if (!raw) return null;
   try {
     const parsed = storedDraftSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success || parsed.data.sourceSha !== expectedSha) return null;
-    return parsed.data;
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
+}
+
+export function restoreDraftSession(raw: string | null, expectedSha: string): StoredDraft | null {
+  if (!sourceShaSchema.safeParse(expectedSha).success) return null;
+  const parsed = parseDraftSession(raw);
+  return parsed?.sourceSha === expectedSha ? parsed : null;
+}
+
+export function createDraftBaseline(model: PermissionStudioModel): DraftBaseline {
+  return {
+    rolePermissions: Object.fromEntries(
+      model.roles
+        .filter((role) => role.code.startsWith("preset_"))
+        .map((role) => [role.code, [...role.permissionCodes]]),
+    ),
+    contractTypes: [...model.contractTypes],
+    contractMenus: Object.fromEntries(
+      Object.entries(model.contractMenus).map(([contractType, codes]) => [
+        contractType,
+        [...codes],
+      ]),
+    ),
+    contractWidgets: Object.fromEntries(
+      Object.entries(model.contractWidgets).map(([contractType, codes]) => [
+        contractType,
+        [...codes],
+      ]),
+    ),
+  };
+}
+
+export function hasDraftChanges(draft: PermissionDraft): boolean {
+  return Boolean(
+    draft.newRoles.length ||
+    draft.deletedRoleCodes?.length ||
+    Object.keys(draft.roleRenames ?? {}).length ||
+    Object.keys(draft.roleNames ?? {}).length ||
+    Object.keys(draft.rolePermissions).length ||
+    Object.keys(draft.contractMenus).length ||
+    Object.keys(draft.contractWidgets).length,
+  );
 }
 
 function sortedEntries(record: Record<string, string[]>): Array<[string, string[]]> {
@@ -159,8 +223,8 @@ function replayMembership(
   return [...next].sort();
 }
 
-export function rebasePermissionDraft(
-  oldModel: PermissionStudioModel,
+export function rebasePermissionDraftFromBaseline(
+  oldBaseline: DraftBaseline,
   newModel: PermissionStudioModel,
   draft: PermissionDraft,
 ): DraftRebaseResult {
@@ -194,7 +258,7 @@ export function rebasePermissionDraft(
   }
 
   for (const roleCode of [...(draft.deletedRoleCodes ?? [])].sort()) {
-    if (!isEditableRole(oldModel, roleCode)) {
+    if (!(roleCode in oldBaseline.rolePermissions)) {
       conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
       continue;
     }
@@ -206,7 +270,7 @@ export function rebasePermissionDraft(
     ([left], [right]) => left.localeCompare(right),
   )) {
     if ((draft.deletedRoleCodes ?? []).includes(roleCode)) continue;
-    if (!isEditableRole(oldModel, roleCode) || !isEditableRole(newModel, roleCode)) {
+    if (!(roleCode in oldBaseline.rolePermissions) || !isEditableRole(newModel, roleCode)) {
       conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
       continue;
     }
@@ -221,7 +285,7 @@ export function rebasePermissionDraft(
     left.localeCompare(right),
   )) {
     if ((draft.deletedRoleCodes ?? []).includes(roleCode)) continue;
-    if (!isEditableRole(oldModel, roleCode) || !isEditableRole(newModel, roleCode)) {
+    if (!(roleCode in oldBaseline.rolePermissions) || !isEditableRole(newModel, roleCode)) {
       conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
       continue;
     }
@@ -234,14 +298,14 @@ export function rebasePermissionDraft(
 
   for (const [roleCode, oldMembership] of sortedEntries(draft.rolePermissions)) {
     if ((draft.deletedRoleCodes ?? []).includes(roleCode)) continue;
-    const oldRole = oldModel.roles.find((role) => role.code === roleCode);
-    if (!oldRole || !isEditableRole(newModel, roleCode)) {
+    const oldRolePermissions = oldBaseline.rolePermissions[roleCode];
+    if (!oldRolePermissions || !isEditableRole(newModel, roleCode)) {
       conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
       continue;
     }
     const newRole = newModel.roles.find((role) => role.code === roleCode)!;
     const membership = replayMembership(
-      oldRole.permissionCodes,
+      oldRolePermissions,
       oldMembership,
       newRole.permissionCodes,
       (code) => Boolean(newModel.permissionRegistry[code]),
@@ -253,11 +317,11 @@ export function rebasePermissionDraft(
 
   for (const kind of ["menu", "widget"] as const) {
     const draftField = kind === "menu" ? "contractMenus" : "contractWidgets";
-    const oldField = kind === "menu" ? oldModel.contractMenus : oldModel.contractWidgets;
+    const oldField = kind === "menu" ? oldBaseline.contractMenus : oldBaseline.contractWidgets;
     const newField = kind === "menu" ? newModel.contractMenus : newModel.contractWidgets;
     for (const [contractType, oldMembership] of sortedEntries(draft[draftField])) {
       if (
-        !oldModel.contractTypes.includes(contractType) ||
+        !oldBaseline.contractTypes.includes(contractType) ||
         !isEditableContract(newModel, contractType)
       ) {
         conflicts.push({ kind: "contract", ownerCode: contractType, code: contractType });
@@ -284,4 +348,12 @@ export function rebasePermissionDraft(
         left.code.localeCompare(right.code),
     ),
   };
+}
+
+export function rebasePermissionDraft(
+  oldModel: PermissionStudioModel,
+  newModel: PermissionStudioModel,
+  draft: PermissionDraft,
+): DraftRebaseResult {
+  return rebasePermissionDraftFromBaseline(createDraftBaseline(oldModel), newModel, draft);
 }

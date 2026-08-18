@@ -20,8 +20,13 @@ import {
   type PermissionDraft,
 } from "@/src/domain/draft";
 import {
+  ACTIVE_DRAFT_STORAGE_KEY,
+  createDraftBaseline,
   draftStorageKey,
+  hasDraftChanges,
+  parseDraftSession,
   rebasePermissionDraft,
+  rebasePermissionDraftFromBaseline,
   restoreDraftSession,
   serializeDraftSession,
   type DraftConflict,
@@ -147,19 +152,45 @@ export function StudioShell({
       window.localStorage.getItem(storageKey) ?? window.sessionStorage.getItem(storageKey),
       model.sourceSha,
     );
-    setDraft(restored?.draft ?? createEmptyDraft());
+    const activeDraft = parseDraftSession(window.localStorage.getItem(ACTIVE_DRAFT_STORAGE_KEY));
+    const activeForCurrentSha =
+      !restored && activeDraft?.sourceSha === model.sourceSha ? activeDraft : null;
+    const migrated =
+      !restored && !activeForCurrentSha && activeDraft?.baseline
+        ? rebasePermissionDraftFromBaseline(activeDraft.baseline, model, activeDraft.draft)
+        : null;
+    setDraft(
+      restored?.draft ?? activeForCurrentSha?.draft ?? migrated?.draft ?? createEmptyDraft(),
+    );
+    setConflicts(
+      restored?.conflicts ??
+        activeForCurrentSha?.conflicts ??
+        (migrated ? [...(activeDraft?.conflicts ?? []), ...migrated.conflicts] : []),
+    );
     setReadyDraftSha(model.sourceSha);
   }, [model?.sourceSha]);
 
   useEffect(() => {
     if (!model || readyDraftSha !== model.sourceSha) return;
     const storageKey = draftStorageKey(model.sourceSha);
-    window.localStorage.setItem(
-      storageKey,
-      serializeDraftSession({ version: 1, sourceSha: model.sourceSha, draft }),
-    );
+    const serialized = serializeDraftSession({
+      version: 1,
+      sourceSha: model.sourceSha,
+      draft,
+      baseline: createDraftBaseline(model),
+      ...(conflicts.length ? { conflicts } : {}),
+    });
+    window.localStorage.setItem(storageKey, serialized);
+    if (hasDraftChanges(draft) || conflicts.length) {
+      window.localStorage.setItem(ACTIVE_DRAFT_STORAGE_KEY, serialized);
+    } else if (
+      parseDraftSession(window.localStorage.getItem(ACTIVE_DRAFT_STORAGE_KEY))?.sourceSha ===
+      model.sourceSha
+    ) {
+      window.localStorage.removeItem(ACTIVE_DRAFT_STORAGE_KEY);
+    }
     window.sessionStorage.removeItem(storageKey);
-  }, [draft, model, readyDraftSha]);
+  }, [conflicts, draft, model, readyDraftSha]);
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem(ACTIVE_CHANGE_JOB_KEY);
@@ -235,7 +266,7 @@ export function StudioShell({
     [draft, model],
   );
   const jobActive = activeJob !== null || hasStoredJob || flowPending;
-  const draftLocked = jobActive || loading;
+  const draftLocked = jobActive || loading || !model || readyDraftSha !== model.sourceSha;
   const currentObject =
     task === "roles" && selectedRoleCode
       ? {
@@ -451,7 +482,10 @@ export function StudioShell({
         disabled={draftLocked}
         reviewDisabled={loading}
         generatePrDisabled={conflicts.length > 0}
-        onDiscardAll={() => setDraft(createEmptyDraft())}
+        onDiscardAll={() => {
+          setDraft(createEmptyDraft());
+          setConflicts([]);
+        }}
         onReview={() => setView("review")}
         onGeneratePr={() => {
           setFlowOpen(true);
