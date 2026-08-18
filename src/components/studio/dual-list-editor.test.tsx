@@ -114,7 +114,7 @@ describe("DualListEditor", () => {
     expect(screen.getByRole("checkbox", { name: "邀请用户" })).not.toBeChecked();
   });
 
-  it("shows group assignment counts and supports collapsing and expanding groups", async () => {
+  it("hides empty groups and supports collapsing and expanding groups", async () => {
     const user = userEvent.setup();
     render(<DualListEditor {...props} onTransfer={vi.fn()} />);
     const availablePanel = screen.getByRole("region", { name: "可添加权限" });
@@ -124,7 +124,12 @@ describe("DualListEditor", () => {
       "aria-expanded",
       "true",
     );
-    expect(within(assignedPanel).getByRole("button", { name: "用户 0 / 1" })).toBeVisible();
+    expect(
+      within(assignedPanel).queryByRole("button", { name: "用户 0 / 1" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(availablePanel).queryByRole("button", { name: "订单 0 / 1" }),
+    ).not.toBeInTheDocument();
 
     const reportGroup = within(availablePanel).getByRole("button", { name: "报表 1 / 1" });
     expect(reportGroup).toHaveAttribute("aria-expanded", "false");

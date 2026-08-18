@@ -428,13 +428,10 @@ export function DualListEditor({
     );
   const matchingAvailable = matching(available);
   const matchingAssigned = matching(assigned);
-  const matchingGroups = new Set(
-    [...matchingAvailable, ...matchingAssigned].map((item) => item.group),
-  );
-  const visibleGroups = groups.filter(
-    (group) =>
-      (!groupFilter || group === groupFilter) && (!normalizedQuery || matchingGroups.has(group)),
-  );
+  const matchingAvailableGroups = new Set(matchingAvailable.map((item) => item.group));
+  const matchingAssignedGroups = new Set(matchingAssigned.map((item) => item.group));
+  const visibleAvailableGroups = groups.filter((group) => matchingAvailableGroups.has(group));
+  const visibleAssignedGroups = groups.filter((group) => matchingAssignedGroups.has(group));
   const expandFilteredGroups = Boolean(groupFilter || normalizedQuery);
 
   return (
@@ -485,7 +482,7 @@ export function DualListEditor({
         <TransferPanel
           side="available"
           label={labels.available}
-          groups={visibleGroups}
+          groups={visibleAvailableGroups}
           items={matchingAvailable}
           groupCounts={availableGroupCounts}
           totalGroupCounts={totalGroupCounts}
@@ -524,7 +521,7 @@ export function DualListEditor({
         <TransferPanel
           side="assigned"
           label={labels.assigned}
-          groups={visibleGroups}
+          groups={visibleAssignedGroups}
           items={matchingAssigned}
           groupCounts={assignedGroupCounts}
           totalGroupCounts={totalGroupCounts}
