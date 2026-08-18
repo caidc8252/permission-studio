@@ -114,32 +114,20 @@ describe("DualListEditor", () => {
     expect(screen.getByRole("checkbox", { name: "邀请用户" })).not.toBeChecked();
   });
 
-  it("hides empty groups and supports collapsing and expanding groups", async () => {
-    const user = userEvent.setup();
+  it("hides empty groups and renders static group names and counts", () => {
     render(<DualListEditor {...props} onTransfer={vi.fn()} />);
     const availablePanel = screen.getByRole("region", { name: "可添加权限" });
     const assignedPanel = screen.getByRole("region", { name: "已分配权限" });
 
-    expect(within(availablePanel).getByRole("button", { name: "用户 1 / 1" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-    expect(
-      within(assignedPanel).queryByRole("button", { name: "用户 0 / 1" }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(availablePanel).queryByRole("button", { name: "订单 0 / 1" }),
-    ).not.toBeInTheDocument();
-
-    const reportGroup = within(availablePanel).getByRole("button", { name: "报表 1 / 1" });
-    expect(reportGroup).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("导出报表")).not.toBeInTheDocument();
-    await user.click(reportGroup);
-    expect(reportGroup).toHaveAttribute("aria-expanded", "true");
+    expect(within(availablePanel).getByRole("heading", { name: "用户 1 / 1" })).toBeVisible();
+    expect(within(assignedPanel).queryByText("用户")).not.toBeInTheDocument();
+    expect(within(availablePanel).queryByText("订单")).not.toBeInTheDocument();
+    expect(within(availablePanel).getByRole("heading", { name: "报表 1 / 1" })).toBeVisible();
     expect(screen.getByText("导出报表")).toBeVisible();
-
-    await user.click(within(availablePanel).getByRole("button", { name: "用户 1 / 1" }));
-    expect(screen.queryByText("邀请用户")).not.toBeInTheDocument();
+    expect(screen.getByText("邀请用户")).toBeVisible();
+    expect(
+      within(availablePanel).queryByRole("button", { name: "用户 1 / 1" }),
+    ).not.toBeInTheDocument();
   });
 
   it("moves selected rows with the explicit assign button", async () => {
@@ -200,7 +188,7 @@ describe("DualListEditor", () => {
     await user.click(screen.getByRole("button", { name: "清空权限分组" }));
     expect(groupFilter).toHaveValue("");
     expect(screen.getByText("邀请用户")).toBeVisible();
-    expect(screen.getByRole("button", { name: "订单 1 / 1" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "订单 1 / 1" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "清空权限分组" })).not.toBeInTheDocument();
   });
 

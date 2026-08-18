@@ -210,9 +210,6 @@ interface TransferPanelProps {
   items: TransferItem[];
   groupCounts: ReadonlyMap<string, number>;
   totalGroupCounts: ReadonlyMap<string, number>;
-  collapsedGroups: ReadonlySet<string>;
-  onGroupToggle: (group: string) => void;
-  expandAllGroups: boolean;
   selection: Set<string>;
   onSelectionChange: (selection: Set<string>) => void;
   itemRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
@@ -232,9 +229,6 @@ function TransferPanel({
   items,
   groupCounts,
   totalGroupCounts,
-  collapsedGroups,
-  onGroupToggle,
-  expandAllGroups,
   selection,
   onSelectionChange,
   itemRefs,
@@ -246,7 +240,6 @@ function TransferPanel({
   directActionLabel,
   onTransfer,
 }: TransferPanelProps) {
-  const groupId = useId();
   const groupedItems = useMemo(() => {
     const grouped = new Map<string, TransferItem[]>();
     for (const item of items) grouped.set(item.group, [...(grouped.get(item.group) ?? []), item]);
@@ -273,62 +266,46 @@ function TransferPanel({
         ) : null}
       </header>
       {groups.length ? (
-        groups.map((group, index) => {
+        groups.map((group) => {
           const groupItems = groupedItems.get(group) ?? [];
-          const expanded = expandAllGroups || !collapsedGroups.has(group);
-          const headingId = `${groupId}-heading-${index}`;
-          const contentId = `${groupId}-content-${index}`;
+          const groupLabel = `${group} ${groupCounts.get(group) ?? 0} / ${totalGroupCounts.get(group) ?? 0}`;
           return (
-            <section className={styles.group} aria-labelledby={headingId} key={group}>
-              <h4 id={headingId}>
-                <button
-                  type="button"
-                  className={styles.groupToggle}
-                  aria-controls={contentId}
-                  aria-expanded={expanded}
-                  aria-label={`${group} ${groupCounts.get(group) ?? 0} / ${totalGroupCounts.get(group) ?? 0}`}
-                  onClick={() => onGroupToggle(group)}
-                >
-                  <span className={styles.groupChevron} aria-hidden="true">
-                    {expanded ? "▾" : "▸"}
-                  </span>
-                  <span className={styles.groupName}>{group}</span>
-                  <span className={styles.groupCount}>
-                    {groupCounts.get(group) ?? 0} / {totalGroupCounts.get(group) ?? 0}
-                  </span>
-                </button>
+            <section className={styles.group} key={group}>
+              <h4 className={styles.groupHeading} aria-label={groupLabel}>
+                <span className={styles.groupName}>{group}</span>
+                <span className={styles.groupCount}>
+                  {groupCounts.get(group) ?? 0} / {totalGroupCounts.get(group) ?? 0}
+                </span>
               </h4>
-              {expanded ? (
-                <ul id={contentId}>
-                  {groupItems.map((item) => (
-                    <TransferRow
-                      key={item.id}
-                      item={item}
-                      checked={selection.has(item.id)}
-                      indeterminate={isItemIndeterminate?.({ side, item, selection }) ?? false}
-                      onCheckedChange={(checked) => {
-                        if (reduceSelection) {
-                          onSelectionChange(
-                            new Set(reduceSelection({ side, item, checked, selection })),
-                          );
-                          return;
-                        }
-                        const next = new Set(selection);
-                        if (checked) next.add(item.id);
-                        else next.delete(item.id);
-                        onSelectionChange(next);
-                      }}
-                      itemRef={(element) => {
-                        if (element) itemRefs.current.set(item.id, element);
-                        else itemRefs.current.delete(item.id);
-                      }}
-                      renderItem={renderItem}
-                      directActionLabel={directActionLabel}
-                      onDirectAction={onTransfer ? () => onTransfer([item.id]) : undefined}
-                    />
-                  ))}
-                </ul>
-              ) : null}
+              <ul>
+                {groupItems.map((item) => (
+                  <TransferRow
+                    key={item.id}
+                    item={item}
+                    checked={selection.has(item.id)}
+                    indeterminate={isItemIndeterminate?.({ side, item, selection }) ?? false}
+                    onCheckedChange={(checked) => {
+                      if (reduceSelection) {
+                        onSelectionChange(
+                          new Set(reduceSelection({ side, item, checked, selection })),
+                        );
+                        return;
+                      }
+                      const next = new Set(selection);
+                      if (checked) next.add(item.id);
+                      else next.delete(item.id);
+                      onSelectionChange(next);
+                    }}
+                    itemRef={(element) => {
+                      if (element) itemRefs.current.set(item.id, element);
+                      else itemRefs.current.delete(item.id);
+                    }}
+                    renderItem={renderItem}
+                    directActionLabel={directActionLabel}
+                    onDirectAction={onTransfer ? () => onTransfer([item.id]) : undefined}
+                  />
+                ))}
+              </ul>
             </section>
           );
         })
@@ -362,10 +339,6 @@ export function DualListEditor({
   );
   const [availableSelection, setAvailableSelection] = useState<Set<string>>(new Set());
   const [assignedSelection, setAssignedSelection] = useState<Set<string>>(new Set());
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<Side, Set<string>>>(() => ({
-    available: new Set(groups.filter((group) => group !== available[0]?.group)),
-    assigned: new Set(groups.filter((group) => group !== assigned[0]?.group)),
-  }));
   const [announcement, setAnnouncement] = useState("");
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
@@ -374,15 +347,6 @@ export function DualListEditor({
   const sourceRefs = useRef(new Map<string, HTMLInputElement>());
   const pendingFocusRef = useRef<{ side: Side; id: string } | null>(null);
 
-  const toggleGroup = (side: Side, group: string) => {
-    setCollapsedGroups((current) => {
-      const nextSide = new Set(current[side]);
-      if (nextSide.has(group)) nextSide.delete(group);
-      else nextSide.add(group);
-      return { ...current, [side]: nextSide };
-    });
-  };
-
   const transfer = (direction: TransferRequest["direction"], ids: readonly string[]) => {
     const unique = uniqueSorted(ids);
     const destination = direction === "assign" ? "assigned" : "available";
@@ -390,15 +354,6 @@ export function DualListEditor({
       setAnnouncement(labels.noSelection);
       return;
     }
-    const sourceItems = direction === "assign" ? available : assigned;
-    const destinationGroups = new Set(
-      sourceItems.filter((item) => unique.includes(item.id)).map((item) => item.group),
-    );
-    setCollapsedGroups((current) => {
-      const nextDestination = new Set(current[destination]);
-      for (const group of destinationGroups) nextDestination.delete(group);
-      return { ...current, [destination]: nextDestination };
-    });
     pendingFocusRef.current = { side: destination, id: unique[0]! };
     onTransfer({ direction, ids: unique });
     setAnnouncement(labels.moved(direction, unique.length));
@@ -432,8 +387,6 @@ export function DualListEditor({
   const matchingAssignedGroups = new Set(matchingAssigned.map((item) => item.group));
   const visibleAvailableGroups = groups.filter((group) => matchingAvailableGroups.has(group));
   const visibleAssignedGroups = groups.filter((group) => matchingAssignedGroups.has(group));
-  const expandFilteredGroups = Boolean(groupFilter || normalizedQuery);
-
   return (
     <section aria-label={ariaLabel} className={styles.transfer}>
       <div className={styles.filters}>
@@ -486,9 +439,6 @@ export function DualListEditor({
           items={matchingAvailable}
           groupCounts={availableGroupCounts}
           totalGroupCounts={totalGroupCounts}
-          collapsedGroups={collapsedGroups.available}
-          onGroupToggle={(group) => toggleGroup("available", group)}
-          expandAllGroups={expandFilteredGroups}
           selection={availableSelection}
           onSelectionChange={setAvailableSelection}
           itemRefs={sourceRefs}
@@ -525,9 +475,6 @@ export function DualListEditor({
           items={matchingAssigned}
           groupCounts={assignedGroupCounts}
           totalGroupCounts={totalGroupCounts}
-          collapsedGroups={collapsedGroups.assigned}
-          onGroupToggle={(group) => toggleGroup("assigned", group)}
-          expandAllGroups={expandFilteredGroups}
           selection={assignedSelection}
           onSelectionChange={setAssignedSelection}
           itemRefs={destinationRefs}

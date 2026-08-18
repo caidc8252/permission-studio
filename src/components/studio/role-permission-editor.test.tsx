@@ -82,11 +82,11 @@ describe("RolePermissionEditor", () => {
     ]);
     render(<RolePermissionEditor model={model} draft={draft} onDraftChange={onDraftChange} />);
 
-    await user.click(
-      within(screen.getByRole("region", { name: "可添加权限" })).getByRole("button", {
+    expect(
+      within(screen.getByRole("region", { name: "可添加权限" })).getByRole("heading", {
         name: "订单 1 / 2",
       }),
-    );
+    ).toBeVisible();
     await user.click(screen.getByRole("checkbox", { name: "管理订单" }));
     await user.click(screen.getByRole("button", { name: "添加已选权限" }));
 
@@ -111,11 +111,11 @@ describe("RolePermissionEditor", () => {
       />,
     );
 
-    await user.click(
-      within(screen.getByRole("region", { name: "可添加权限" })).getByRole("button", {
+    expect(
+      within(screen.getByRole("region", { name: "可添加权限" })).getByRole("heading", {
         name: "订单 1 / 2",
       }),
-    );
+    ).toBeVisible();
     await user.click(screen.getByRole("button", { name: "添加：管理订单" }));
 
     expect(onDraftChange).toHaveBeenCalledWith(

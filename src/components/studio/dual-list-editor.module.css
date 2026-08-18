@@ -137,31 +137,17 @@
   margin-top: 8px;
 }
 
-.groupToggle {
+.groupHeading {
   display: grid;
   width: 100%;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 7px;
   align-items: center;
   padding: 7px 4px;
   color: var(--muted, #64748b);
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   font-size: 0.82rem;
   font-weight: 750;
   text-align: left;
-}
-
-.groupToggle:hover {
-  color: var(--text, #172033);
-  background: color-mix(in srgb, var(--surface, #ffffff) 72%, transparent);
-}
-
-.groupChevron {
-  width: 0.75rem;
-  color: var(--muted, #64748b);
-  text-align: center;
 }
 
 .groupName {
