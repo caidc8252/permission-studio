@@ -16,6 +16,9 @@ export interface NewRoleNames {
 
 export type NewRoleDescriptions = NewRoleNames;
 
+export type RoleDescriptionField = "descriptionEn" | "descriptionZhCn" | "descriptionJa";
+export type RoleDescriptionValidationErrors = Partial<Record<RoleDescriptionField, string>>;
+
 export interface NewRoleInput {
   roleId: number;
   code: string;
@@ -93,6 +96,24 @@ export function validateRoleNames(
   return errors;
 }
 
+export function validateRoleDescriptions(
+  descriptions: NewRoleDescriptions,
+): RoleDescriptionValidationErrors {
+  const errors: RoleDescriptionValidationErrors = {};
+  const fields = [
+    { locale: "zh-CN", field: "descriptionZhCn", label: "中文描述" },
+    { locale: "en", field: "descriptionEn", label: "英文描述" },
+    { locale: "ja", field: "descriptionJa", label: "日文描述" },
+  ] as const;
+  for (const { locale, field, label } of fields) {
+    const description = descriptions[locale].trim();
+    if (!description || description.length > 500 || hasControlCharacter(description)) {
+      errors[field] = `${label}不能为空，且不能超过 500 个字符`;
+    }
+  }
+  return errors;
+}
+
 export function roleI18nStem(roleCode: string): string {
   return roleCode.replace(/_(.)/gu, (_, character: string) => character.toUpperCase());
 }
@@ -152,17 +173,7 @@ export function validateNewRole(
   );
 
   if (input.descriptions) {
-    const descriptionFields = [
-      { locale: "zh-CN", field: "descriptionZhCn", label: "中文描述" },
-      { locale: "en", field: "descriptionEn", label: "英文描述" },
-      { locale: "ja", field: "descriptionJa", label: "日文描述" },
-    ] as const;
-    for (const { locale, field, label } of descriptionFields) {
-      const description = input.descriptions[locale].trim();
-      if (!description || description.length > 500 || hasControlCharacter(description)) {
-        errors[field] = `${label}不能为空，且不能超过 500 个字符`;
-      }
-    }
+    Object.assign(errors, validateRoleDescriptions(input.descriptions));
   }
 
   const permissions = new Set(model.permissionCodes);

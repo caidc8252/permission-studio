@@ -147,6 +147,7 @@ export function PullRequestFlow({
       (impact.deletedRoleCodes?.length ?? 0) +
       impact.renamedRoles.length +
       impact.updatedRoleNames.length +
+      (impact.updatedRoleDescriptions?.length ?? 0) +
       impact.addedRolePermissions.length +
       impact.removedRolePermissions.length +
       impact.addedContractOwners.length +

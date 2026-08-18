@@ -7,8 +7,11 @@ import { updateExistingRole, type PermissionDraft } from "@/src/domain/draft";
 import type { PermissionStudioModel } from "@/src/domain/model";
 import {
   validateRoleCode,
+  validateRoleDescriptions,
   validateRoleNames,
+  type NewRoleDescriptions,
   type NewRoleNames,
+  type RoleDescriptionField,
   type RoleNameField,
 } from "@/src/domain/new-role";
 
@@ -21,6 +24,28 @@ interface EditRoleCodeFormProps {
   onCancel: () => void;
   onSaved: (roleCode: string) => void;
 }
+
+const nameFields = [
+  { locale: "zh-CN", field: "nameZhCn", label: "中文名称" },
+  { locale: "en", field: "nameEn", label: "英文名称" },
+  { locale: "ja", field: "nameJa", label: "日文名称" },
+] as const satisfies ReadonlyArray<{
+  locale: keyof NewRoleNames;
+  field: RoleNameField;
+  label: string;
+}>;
+
+const descriptionFields = [
+  { locale: "zh-CN", field: "descriptionZhCn", label: "中文描述" },
+  { locale: "en", field: "descriptionEn", label: "英文描述" },
+  { locale: "ja", field: "descriptionJa", label: "日文描述" },
+] as const satisfies ReadonlyArray<{
+  locale: keyof NewRoleDescriptions;
+  field: RoleDescriptionField;
+  label: string;
+}>;
+
+type TranslationTarget = "name" | "description";
 
 export function EditRoleCodeForm({
   model,
@@ -41,7 +66,18 @@ export function EditRoleCodeForm({
       ja: model.translations.ja[role.roleName] ?? roleCode,
     },
   );
+  const [descriptions, setDescriptions] = useState<NewRoleDescriptions>(
+    draft.roleDescriptions?.[roleCode] ?? {
+      en: model.translations.en[role.remark] ?? roleCode,
+      "zh-CN": model.translations["zh-CN"][role.remark] ?? roleCode,
+      ja: model.translations.ja[role.remark] ?? roleCode,
+    },
+  );
   const [attempted, setAttempted] = useState(false);
+  const [translating, setTranslating] = useState<TranslationTarget | null>(null);
+  const [translationFeedback, setTranslationFeedback] = useState<
+    Partial<Record<TranslationTarget, { kind: "success" | "error"; message: string }>>
+  >({});
   const occupiedCodes = [
     ...draft.newRoles.map((role) => role.code),
     ...Object.entries(draft.roleRenames ?? {})
@@ -59,15 +95,7 @@ export function EditRoleCodeForm({
       .map(([, candidateNames]) => candidateNames),
   ];
   const nameErrors = validateRoleNames(model, occupiedNames, names, roleCode);
-  const nameFields = [
-    { locale: "zh-CN", field: "nameZhCn", label: "中文名称" },
-    { locale: "en", field: "nameEn", label: "英文名称" },
-    { locale: "ja", field: "nameJa", label: "日文名称" },
-  ] as const satisfies ReadonlyArray<{
-    locale: keyof NewRoleNames;
-    field: RoleNameField;
-    label: string;
-  }>;
+  const descriptionErrors = validateRoleDescriptions(descriptions);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -79,12 +107,69 @@ export function EditRoleCodeForm({
     };
   }, []);
 
+  const translateText = async (target: TranslationTarget) => {
+    const text = target === "name" ? names["zh-CN"].trim() : descriptions["zh-CN"].trim();
+    if (!text || translating) return;
+
+    setTranslating(target);
+    setTranslationFeedback((current) => ({ ...current, [target]: undefined }));
+    try {
+      const response = await fetch("/api/translate-role-name", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const payload = (await response.json()) as {
+        data?: { en?: unknown; ja?: unknown };
+        message?: unknown;
+      };
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.message === "string" ? payload.message : "无法翻译角色内容。",
+        );
+      }
+      const translatedEn = payload.data?.en;
+      const translatedJa = payload.data?.ja;
+      if (typeof translatedEn !== "string" || typeof translatedJa !== "string") {
+        throw new Error("翻译服务返回了无效结果。");
+      }
+      const maxLength = target === "name" ? 100 : 500;
+      if (translatedEn.length > maxLength || translatedJa.length > maxLength) {
+        throw new Error(`翻译结果超过 ${maxLength} 个字符，请缩短中文内容后重试。`);
+      }
+
+      if (target === "name") {
+        setNames((current) => ({ ...current, en: translatedEn, ja: translatedJa }));
+      } else {
+        setDescriptions((current) => ({ ...current, en: translatedEn, ja: translatedJa }));
+      }
+      setTranslationFeedback((current) => ({
+        ...current,
+        [target]: {
+          kind: "success",
+          message: target === "name" ? "已填充英文和日文名称" : "已填充英文和日文描述",
+        },
+      }));
+    } catch (error) {
+      setTranslationFeedback((current) => ({
+        ...current,
+        [target]: {
+          kind: "error",
+          message: error instanceof Error ? error.message : "无法翻译角色内容。",
+        },
+      }));
+    } finally {
+      setTranslating(null);
+    }
+  };
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAttempted(true);
-    if (codeError || Object.keys(nameErrors).length) return;
+    if (codeError || Object.keys(nameErrors).length || Object.keys(descriptionErrors).length)
+      return;
     const nextCode = code.trim();
-    onDraftChange(updateExistingRole(draft, model, roleCode, nextCode, names));
+    onDraftChange(updateExistingRole(draft, model, roleCode, nextCode, names, descriptions));
     onSaved(nextCode);
   };
 
@@ -146,9 +231,23 @@ export function EditRoleCodeForm({
             const error = attempted ? nameErrors[field] : undefined;
             const errorId = `edit-role-${locale}-name-error`;
             return (
-              <label className={styles.compactField} key={locale}>
-                <span>{label}</span>
+              <div className={styles.compactField} key={locale}>
+                <div className={styles.nameFieldHeader}>
+                  <label htmlFor={`edit-role-${locale}-name`}>{label}</label>
+                  {locale === "zh-CN" ? (
+                    <button
+                      className={styles.translateButton}
+                      type="button"
+                      aria-label="将中文名称翻译为英文和日文"
+                      disabled={!names["zh-CN"].trim() || translating !== null}
+                      onClick={() => void translateText("name")}
+                    >
+                      {translating === "name" ? "翻译中…" : "翻译英/日"}
+                    </button>
+                  ) : null}
+                </div>
                 <input
+                  id={`edit-role-${locale}-name`}
                   type="text"
                   aria-label={`角色${label}`}
                   aria-invalid={Boolean(error)}
@@ -164,7 +263,73 @@ export function EditRoleCodeForm({
                     {error}
                   </small>
                 ) : null}
-              </label>
+                {locale === "zh-CN" && translationFeedback.name ? (
+                  <small
+                    className={
+                      translationFeedback.name.kind === "success"
+                        ? styles.translationSuccess
+                        : undefined
+                    }
+                    role={translationFeedback.name.kind === "error" ? "alert" : "status"}
+                  >
+                    {translationFeedback.name.message}
+                  </small>
+                ) : null}
+              </div>
+            );
+          })}
+          {descriptionFields.map(({ locale, field, label }) => {
+            const error = attempted ? descriptionErrors[field] : undefined;
+            const errorId = `edit-role-${locale}-description-error`;
+            const inputId = `edit-role-${locale}-description`;
+            return (
+              <div className={styles.compactField} key={locale}>
+                <div className={styles.nameFieldHeader}>
+                  <label htmlFor={inputId}>{label}</label>
+                  {locale === "zh-CN" ? (
+                    <button
+                      className={styles.translateButton}
+                      type="button"
+                      aria-label="将中文描述翻译为英文和日文"
+                      disabled={!descriptions["zh-CN"].trim() || translating !== null}
+                      onClick={() => void translateText("description")}
+                    >
+                      {translating === "description" ? "翻译中…" : "翻译英/日"}
+                    </button>
+                  ) : null}
+                </div>
+                <textarea
+                  id={inputId}
+                  aria-label={`角色${label}`}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? errorId : undefined}
+                  value={descriptions[locale]}
+                  maxLength={500}
+                  onChange={(event) =>
+                    setDescriptions((current) => ({
+                      ...current,
+                      [locale]: event.target.value,
+                    }))
+                  }
+                />
+                {error ? (
+                  <small id={errorId} role="alert">
+                    {error}
+                  </small>
+                ) : null}
+                {locale === "zh-CN" && translationFeedback.description ? (
+                  <small
+                    className={
+                      translationFeedback.description.kind === "success"
+                        ? styles.translationSuccess
+                        : undefined
+                    }
+                    role={translationFeedback.description.kind === "error" ? "alert" : "status"}
+                  >
+                    {translationFeedback.description.message}
+                  </small>
+                ) : null}
+              </div>
             );
           })}
         </div>

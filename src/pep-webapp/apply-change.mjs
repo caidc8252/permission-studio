@@ -10,6 +10,7 @@ import {
   planRoleDeletionEdit,
   planRoleTranslationEdit,
   planRoleTranslationNameEdit,
+  planRoleTranslationDescriptionEdit,
   planRoleTranslationDeletionEdit,
   planSourceEdits,
 } from "./source-editor.mjs";
@@ -40,9 +41,7 @@ const SKIPPED_DIRECTORIES = new Set([".git", ".next", "coverage", "dist", "node_
 
 function containsToken(source, token) {
   const escaped = token.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  return new RegExp(`(?:^|[^A-Za-z0-9_.-])${escaped}(?=$|[^A-Za-z0-9_.-])`, "mu").test(
-    source,
-  );
+  return new RegExp(`(?:^|[^A-Za-z0-9_.-])${escaped}(?=$|[^A-Za-z0-9_.-])`, "mu").test(source);
 }
 
 async function findRoleReferences(root, roleCodes) {
@@ -175,6 +174,15 @@ export async function applyPermissionChange(worktreePath, change) {
         translations[index] = applySourceEdits(
           source,
           planRoleTranslationNameEdit(source, stem, role.names[locales[index]]),
+        );
+      }
+    }
+    if (role.descriptions) {
+      const stem = role.roleDescriptionKey.slice("role.".length, -"Desc".length);
+      for (const [index, source] of translations.entries()) {
+        translations[index] = applySourceEdits(
+          source,
+          planRoleTranslationDescriptionEdit(source, stem, role.descriptions[locales[index]]),
         );
       }
     }

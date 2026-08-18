@@ -6,8 +6,10 @@ import {
   validateRoleNames,
   validateRoleCode,
   type NewRoleDraft,
+  type NewRoleDescriptions,
   type NewRoleInput,
   type NewRoleNames,
+  validateRoleDescriptions,
 } from "@/src/domain/new-role";
 
 export interface PermissionDraft {
@@ -15,6 +17,7 @@ export interface PermissionDraft {
   deletedRoleCodes?: string[];
   roleRenames?: Record<string, string>;
   roleNames?: Record<string, NewRoleNames>;
+  roleDescriptions?: Record<string, NewRoleDescriptions>;
   rolePermissions: Record<string, string[]>;
   contractMenus: Record<string, string[]>;
   contractWidgets: Record<string, string[]>;
@@ -28,6 +31,11 @@ export interface ImpactDiff {
     roleCode: string;
     oldNames: NewRoleNames;
     newNames: NewRoleNames;
+  }>;
+  updatedRoleDescriptions?: Array<{
+    roleCode: string;
+    oldDescriptions: NewRoleDescriptions;
+    newDescriptions: NewRoleDescriptions;
   }>;
   addedRolePermissions: Array<{ roleCode: string; code: string }>;
   removedRolePermissions: Array<{ roleCode: string; code: string }>;
@@ -164,6 +172,21 @@ function modelRoleNames(
   };
 }
 
+function modelRoleDescriptions(
+  model: PermissionStudioModel,
+  roleCode: string,
+): { remark: string; descriptions: NewRoleDescriptions } {
+  const role = editableRole(model, roleCode);
+  return {
+    remark: role.remark,
+    descriptions: {
+      en: model.translations.en[role.remark] ?? role.code,
+      "zh-CN": model.translations["zh-CN"][role.remark] ?? role.code,
+      ja: model.translations.ja[role.remark] ?? role.code,
+    },
+  };
+}
+
 export function setExistingRoleNames(
   draft: PermissionDraft,
   model: PermissionStudioModel,
@@ -194,18 +217,51 @@ export function setExistingRoleNames(
   return { ...draft, roleNames };
 }
 
+export function setExistingRoleDescriptions(
+  draft: PermissionDraft,
+  model: PermissionStudioModel,
+  roleCode: string,
+  descriptions: NewRoleDescriptions,
+): PermissionDraft {
+  const baseline = modelRoleDescriptions(model, roleCode).descriptions;
+  const errors = validateRoleDescriptions(descriptions);
+  const firstError = Object.values(errors)[0];
+  if (firstError) throw new Error(firstError);
+  const normalized = {
+    en: descriptions.en.trim(),
+    "zh-CN": descriptions["zh-CN"].trim(),
+    ja: descriptions.ja.trim(),
+  };
+  const roleDescriptions = { ...(draft.roleDescriptions ?? {}) };
+  if ((["en", "zh-CN", "ja"] as const).every((locale) => normalized[locale] === baseline[locale])) {
+    delete roleDescriptions[roleCode];
+  } else {
+    roleDescriptions[roleCode] = normalized;
+  }
+  if (Object.keys(roleDescriptions).length) return { ...draft, roleDescriptions };
+  const next = { ...draft };
+  delete next.roleDescriptions;
+  return next;
+}
+
 export function updateExistingRole(
   draft: PermissionDraft,
   model: PermissionStudioModel,
   roleCode: string,
   nextCode: string,
   names: NewRoleNames,
+  descriptions: NewRoleDescriptions,
 ): PermissionDraft {
-  return setExistingRoleNames(
-    renameExistingRole(draft, model, roleCode, nextCode),
+  return setExistingRoleDescriptions(
+    setExistingRoleNames(
+      renameExistingRole(draft, model, roleCode, nextCode),
+      model,
+      roleCode,
+      names,
+    ),
     model,
     roleCode,
-    names,
+    descriptions,
   );
 }
 
@@ -297,9 +353,11 @@ export function discardRoleDraft(draft: PermissionDraft, roleCode: string): Perm
   const rolePermissions = { ...draft.rolePermissions };
   const roleRenames = { ...(draft.roleRenames ?? {}) };
   const roleNames = { ...(draft.roleNames ?? {}) };
+  const roleDescriptions = { ...(draft.roleDescriptions ?? {}) };
   delete rolePermissions[roleCode];
   delete roleRenames[roleCode];
   delete roleNames[roleCode];
+  delete roleDescriptions[roleCode];
   const next: PermissionDraft = {
     ...draft,
     newRoles: draft.newRoles.filter((role) => role.code !== roleCode),
@@ -308,6 +366,8 @@ export function discardRoleDraft(draft: PermissionDraft, roleCode: string): Perm
     roleNames,
     rolePermissions,
   };
+  if (Object.keys(roleDescriptions).length) next.roleDescriptions = roleDescriptions;
+  else delete next.roleDescriptions;
   if (!next.deletedRoleCodes?.length) delete next.deletedRoleCodes;
   return next;
 }
@@ -443,6 +503,13 @@ export function applyDraftToModel(
         names[locale],
       ]),
     );
+  const existingRoleDescriptionEntries = (locale: "en" | "zh-CN" | "ja") =>
+    Object.fromEntries(
+      Object.entries(draft.roleDescriptions ?? {}).map(([roleCode, descriptions]) => [
+        modelRoleDescriptions(model, roleCode).remark,
+        descriptions[locale],
+      ]),
+    );
   return {
     ...model,
     roles: [
@@ -459,16 +526,19 @@ export function applyDraftToModel(
       en: {
         ...model.translations.en,
         ...existingRoleTranslationEntries("en"),
+        ...existingRoleDescriptionEntries("en"),
         ...translationEntries("en"),
       },
       "zh-CN": {
         ...model.translations["zh-CN"],
         ...existingRoleTranslationEntries("zh-CN"),
+        ...existingRoleDescriptionEntries("zh-CN"),
         ...translationEntries("zh-CN"),
       },
       ja: {
         ...model.translations.ja,
         ...existingRoleTranslationEntries("ja"),
+        ...existingRoleDescriptionEntries("ja"),
         ...translationEntries("ja"),
       },
     },
@@ -496,6 +566,13 @@ export function buildImpactDiff(model: PermissionStudioModel, draft: PermissionD
         roleCode,
         oldNames: modelRoleNames(model, roleCode).names,
         newNames,
+      }))
+      .sort((left, right) => left.roleCode.localeCompare(right.roleCode)),
+    updatedRoleDescriptions: Object.entries(draft.roleDescriptions ?? {})
+      .map(([roleCode, newDescriptions]) => ({
+        roleCode,
+        oldDescriptions: modelRoleDescriptions(model, roleCode).descriptions,
+        newDescriptions,
       }))
       .sort((left, right) => left.roleCode.localeCompare(right.roleCode)),
     addedRolePermissions: [],
@@ -535,6 +612,7 @@ export function buildImpactDiff(model: PermissionStudioModel, draft: PermissionD
   for (const roleCode of impact.deletedRoleCodes ?? []) scenarios.add(`role:${roleCode}`);
   for (const role of impact.renamedRoles) scenarios.add(`role:${role.newCode}`);
   for (const role of impact.updatedRoleNames) scenarios.add(`role:${role.roleCode}`);
+  for (const role of impact.updatedRoleDescriptions ?? []) scenarios.add(`role:${role.roleCode}`);
   for (const item of [...impact.addedRolePermissions, ...impact.removedRolePermissions]) {
     scenarios.add(`role:${item.roleCode}`);
   }
@@ -554,6 +632,7 @@ export function buildPermissionChange(
     ...Object.keys(draft.rolePermissions),
     ...Object.keys(draft.roleRenames ?? {}),
     ...Object.keys(draft.roleNames ?? {}),
+    ...Object.keys(draft.roleDescriptions ?? {}),
   ]);
   const deletedRoleCodes = new Set(draft.deletedRoleCodes ?? []);
   const roleChanges = [...changedRoleCodes]
@@ -567,6 +646,8 @@ export function buildPermissionChange(
         newRoleCode: draft.roleRenames?.[roleCode],
         roleNameKey: draft.roleNames?.[roleCode] ? role.roleName : undefined,
         names: draft.roleNames?.[roleCode],
+        roleDescriptionKey: draft.roleDescriptions?.[roleCode] ? role.remark : undefined,
+        descriptions: draft.roleDescriptions?.[roleCode],
         ...differences(codes, role.permissionCodes),
       };
     });

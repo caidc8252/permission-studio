@@ -456,6 +456,32 @@ export function planRoleTranslationNameEdit(source, stem, name) {
     : [{ start: property.value.start, end: property.value.end, text: JSON.stringify(name) }];
 }
 
+export function planRoleTranslationDescriptionEdit(source, stem, description) {
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(stem)) {
+    throw new Error("Role translation stem must be a static identifier");
+  }
+  if (typeof description !== "string" || !description.trim()) {
+    throw new Error("Role translation description must be a non-empty string");
+  }
+  const declarations = parseCatalog(source);
+  const messages = requiredDeclaration(declarations, "messages", "ObjectExpression");
+  const roleProperty = findObjectProperty(messages, "role");
+  const roleMessages = unwrap(roleProperty.value);
+  if (roleMessages.type !== "ObjectExpression") throw new Error("messages.role must be an object");
+  const key = `${stem}Desc`;
+  const property = findObjectProperty(roleMessages, key);
+  const current = stringValue(property.value, `messages.role.${key}`);
+  return current === description
+    ? []
+    : [
+        {
+          start: property.value.start,
+          end: property.value.end,
+          text: JSON.stringify(description),
+        },
+      ];
+}
+
 export function planRoleTranslationDeletionEdit(source, stem) {
   if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(stem)) {
     throw new Error("Role translation stem must be a static identifier");

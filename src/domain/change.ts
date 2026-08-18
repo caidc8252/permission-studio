@@ -11,6 +11,11 @@ const roleNamesSchema = z.strictObject({
   "zh-CN": z.string().trim().min(1).max(100),
   ja: z.string().trim().min(1).max(100),
 });
+const roleDescriptionsSchema = z.strictObject({
+  en: z.string().trim().min(1).max(500),
+  "zh-CN": z.string().trim().min(1).max(500),
+  ja: z.string().trim().min(1).max(500),
+});
 const roleChangeSchema = z.strictObject({
   roleCode: identifierSchema.regex(/^preset_/i, "role code must use the preset_ prefix"),
   newRoleCode: identifierSchema
@@ -21,6 +26,8 @@ const roleChangeSchema = z.strictObject({
     .optional(),
   roleNameKey: identifierSchema.regex(/^role\.[A-Za-z_$][A-Za-z0-9_$]*$/).optional(),
   names: roleNamesSchema.optional(),
+  roleDescriptionKey: identifierSchema.regex(/^role\.[A-Za-z_$][A-Za-z0-9_$]*Desc$/).optional(),
+  descriptions: roleDescriptionsSchema.optional(),
   add: leafArraySchema,
   remove: leafArraySchema,
 });
@@ -31,13 +38,7 @@ const newRoleSchema = z.strictObject({
     "role code must use the preset_ prefix and lowercase identifiers",
   ),
   names: roleNamesSchema,
-  descriptions: z
-    .strictObject({
-      en: z.string().trim().min(1).max(500),
-      "zh-CN": z.string().trim().min(1).max(500),
-      ja: z.string().trim().min(1).max(500),
-    })
-    .optional(),
+  descriptions: roleDescriptionsSchema.optional(),
   permissionCodes: leafArraySchema,
 });
 const contractChangeSchema = z.strictObject({
@@ -153,6 +154,13 @@ export const permissionChangeSchema = z
           message: "role names and role name key must be provided together",
         });
       }
+      if (Boolean(role.descriptions) !== Boolean(role.roleDescriptionKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["roleChanges", index],
+          message: "role descriptions and role description key must be provided together",
+        });
+      }
       if (role.newRoleCode) {
         const normalized = role.newRoleCode.toLocaleLowerCase();
         if (normalized === role.roleCode.toLocaleLowerCase()) {
@@ -226,7 +234,12 @@ export const permissionChangeSchema = z
       change.newRoles.length > 0 ||
       Boolean(change.deletedRoleCodes?.length) ||
       change.roleChanges.some(
-        (role) => role.newRoleCode || role.names || role.add.length || role.remove.length,
+        (role) =>
+          role.newRoleCode ||
+          role.names ||
+          role.descriptions ||
+          role.add.length ||
+          role.remove.length,
       ) ||
       change.contractChanges.some(
         (contract) =>
@@ -291,10 +304,26 @@ export function normalizePermissionChange(input: unknown): PermissionChange {
               },
             }
           : {}),
+        ...(role.descriptions
+          ? {
+              descriptions: {
+                en: role.descriptions.en.trim(),
+                "zh-CN": role.descriptions["zh-CN"].trim(),
+                ja: role.descriptions.ja.trim(),
+              },
+            }
+          : {}),
         add: sortedUnique(role.add),
         remove: sortedUnique(role.remove),
       }))
-      .filter((role) => role.newRoleCode || role.names || role.add.length || role.remove.length)
+      .filter(
+        (role) =>
+          role.newRoleCode ||
+          role.names ||
+          role.descriptions ||
+          role.add.length ||
+          role.remove.length,
+      )
       .sort((left, right) => left.roleCode.localeCompare(right.roleCode)),
     contractChanges: parsed.contractChanges
       .map((contract) => ({

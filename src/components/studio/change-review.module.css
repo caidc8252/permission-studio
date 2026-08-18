@@ -135,6 +135,102 @@
   overflow-wrap: anywhere;
 }
 
+.fieldChanges {
+  --review-modified: #a75508;
+  --review-modified-soft: #fff8e8;
+  overflow: hidden;
+  margin: 16px 16px 0;
+  border: 1px solid #f2cf91;
+  border-left: 4px solid var(--review-modified);
+  border-radius: 12px;
+  background: var(--review-modified-soft);
+}
+
+.fieldChangesHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  margin: 0;
+  color: var(--review-modified);
+  border-bottom: 1px solid #f2dcb2;
+  font-size: 0.78rem;
+}
+
+.fieldChangesHeading strong {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 72%);
+  font-size: 0.7rem;
+}
+
+.fieldChangeRows {
+  display: grid;
+  background: var(--surface, #ffffff);
+}
+
+.fieldChange {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  padding: 12px;
+}
+
+.fieldChange + .fieldChange {
+  border-top: 1px solid #f2dcb2;
+}
+
+.fieldLabel {
+  color: var(--review-modified);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.localizedDiffs {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.localizedDiff {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.localeLabel {
+  color: var(--muted, #64748b);
+  font-family: var(--font-mono), "SFMono-Regular", Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.localizedDiff del {
+  min-width: 0;
+  color: var(--muted, #64748b);
+  overflow-wrap: anywhere;
+  text-decoration-color: color-mix(in srgb, var(--review-modified) 55%, transparent);
+}
+
+.localizedDiff strong {
+  min-width: 0;
+  color: var(--text, #172033);
+  overflow-wrap: anywhere;
+}
+
+.diffArrow {
+  color: var(--review-modified);
+  font-family: var(--font-mono), "SFMono-Regular", Consolas, monospace;
+  font-weight: 900;
+}
+
 .deletionNote {
   margin: 0;
   padding: 12px 14px;
@@ -280,6 +376,23 @@
 
   .changeLists {
     padding: 12px;
+  }
+
+  .fieldChanges {
+    margin: 12px 12px 0;
+  }
+
+  .fieldChange {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .localizedDiff {
+    grid-template-columns: 1fr auto 1fr;
+  }
+
+  .localeLabel {
+    grid-column: 1 / -1;
   }
 
   .changeItem {

@@ -116,6 +116,7 @@ export function ChangeReview({
         ...(impact.deletedRoleCodes ?? []).map((roleCode) => ({ roleCode })),
         ...impact.renamedRoles.map((role) => ({ roleCode: role.oldCode })),
         ...impact.updatedRoleNames,
+        ...(impact.updatedRoleDescriptions ?? []),
         ...impact.addedRolePermissions,
         ...impact.removedRolePermissions,
       ].map((item) => item.roleCode),
@@ -133,6 +134,7 @@ export function ChangeReview({
     (impact.deletedRoleCodes?.length ?? 0) +
     impact.renamedRoles.length +
     impact.updatedRoleNames.length +
+    (impact.updatedRoleDescriptions?.length ?? 0) +
     impact.addedRolePermissions.length +
     impact.removedRolePermissions.length +
     impact.addedContractOwners.length +
@@ -177,11 +179,30 @@ export function ChangeReview({
             const updatedNames = impact.updatedRoleNames.find(
               (candidate) => candidate.roleCode === roleCode,
             );
+            const updatedDescriptions = (impact.updatedRoleDescriptions ?? []).find(
+              (candidate) => candidate.roleCode === roleCode,
+            );
             const roleLabel = updatedNames
               ? updatedNames.newNames[locale]
               : role
                 ? translatedModelText(model, locale, role.roleName, roleCode)
                 : (newRole?.names[locale] ?? roleCode);
+            const roleFieldChanges = [
+              updatedNames
+                ? {
+                    label: "角色名称",
+                    oldValues: updatedNames.oldNames,
+                    newValues: updatedNames.newNames,
+                  }
+                : null,
+              updatedDescriptions
+                ? {
+                    label: "角色描述",
+                    oldValues: updatedDescriptions.oldDescriptions,
+                    newValues: updatedDescriptions.newDescriptions,
+                  }
+                : null,
+            ].filter((item): item is NonNullable<typeof item> => item !== null);
             const additions: ReviewItem[] = impact.addedRolePermissions
               .filter((item) => item.roleCode === roleCode)
               .map((item) => ({
@@ -220,12 +241,6 @@ export function ChangeReview({
                           EN: {newRole.names.en} · 日本語: {newRole.names.ja}
                         </small>
                       ) : null}
-                      {updatedNames ? (
-                        <small className={styles.roleTranslations}>
-                          名称：{updatedNames.oldNames[locale]} → {updatedNames.newNames[locale]} ·
-                          EN: {updatedNames.newNames.en} · 日本語: {updatedNames.newNames.ja}
-                        </small>
-                      ) : null}
                     </span>
                   </div>
                   <button
@@ -238,6 +253,45 @@ export function ChangeReview({
                     撤销此角色
                   </button>
                 </header>
+                {roleFieldChanges.length ? (
+                  <section className={styles.fieldChanges} aria-label={`${roleLabel}的字段修改`}>
+                    <h4 className={styles.fieldChangesHeading}>
+                      <span>字段修改</span>
+                      <strong>{roleFieldChanges.length} 项</strong>
+                    </h4>
+                    <div className={styles.fieldChangeRows}>
+                      {roleFieldChanges.map((fieldChange) => (
+                        <article className={styles.fieldChange} key={fieldChange.label}>
+                          <strong className={styles.fieldLabel}>{fieldChange.label}</strong>
+                          <div className={styles.localizedDiffs}>
+                            {(
+                              [
+                                ["zh-CN", "中文"],
+                                ["en", "English"],
+                                ["ja", "日本語"],
+                              ] as const
+                            )
+                              .filter(
+                                ([fieldLocale]) =>
+                                  fieldChange.oldValues[fieldLocale] !==
+                                  fieldChange.newValues[fieldLocale],
+                              )
+                              .map(([fieldLocale, localeLabel]) => (
+                                <div className={styles.localizedDiff} key={fieldLocale}>
+                                  <span className={styles.localeLabel}>{localeLabel}</span>
+                                  <del>{fieldChange.oldValues[fieldLocale]}</del>
+                                  <span className={styles.diffArrow} aria-hidden="true">
+                                    →
+                                  </span>
+                                  <strong>{fieldChange.newValues[fieldLocale]}</strong>
+                                </div>
+                              ))}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
                 {deletedRole ? (
                   <p className={styles.deletionNote}>将删除角色定义以及中文、英文、日文资源。</p>
                 ) : (

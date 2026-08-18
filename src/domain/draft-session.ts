@@ -5,6 +5,7 @@ import {
   deleteRole,
   renameExistingRole,
   setExistingRoleNames,
+  setExistingRoleDescriptions,
   setContractOwnerMembership,
   setRolePermissionMembership,
   type PermissionDraft,
@@ -53,6 +54,7 @@ const draftSchema = z.strictObject({
   deletedRoleCodes: z.array(editableRoleCodeSchema).max(50).optional(),
   roleRenames: z.record(editableRoleCodeSchema, editableRoleCodeSchema).default({}),
   roleNames: z.record(editableRoleCodeSchema, roleNamesSchema).default({}),
+  roleDescriptions: z.record(editableRoleCodeSchema, roleDescriptionsSchema).optional(),
   rolePermissions: z.record(editableRoleCodeSchema, identifierArraySchema),
   contractMenus: z.record(editableContractTypeSchema, identifierArraySchema),
   contractWidgets: z.record(editableContractTypeSchema, identifierArraySchema),
@@ -161,6 +163,7 @@ export function hasDraftChanges(draft: PermissionDraft): boolean {
     draft.deletedRoleCodes?.length ||
     Object.keys(draft.roleRenames ?? {}).length ||
     Object.keys(draft.roleNames ?? {}).length ||
+    Object.keys(draft.roleDescriptions ?? {}).length ||
     Object.keys(draft.rolePermissions).length ||
     Object.keys(draft.contractMenus).length ||
     Object.keys(draft.contractWidgets).length,
@@ -291,6 +294,21 @@ export function rebasePermissionDraftFromBaseline(
     }
     try {
       rebased = setExistingRoleNames(rebased, newModel, roleCode, names);
+    } catch {
+      conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
+    }
+  }
+
+  for (const [roleCode, descriptions] of Object.entries(draft.roleDescriptions ?? {}).sort(
+    ([left], [right]) => left.localeCompare(right),
+  )) {
+    if ((draft.deletedRoleCodes ?? []).includes(roleCode)) continue;
+    if (!(roleCode in oldBaseline.rolePermissions) || !isEditableRole(newModel, roleCode)) {
+      conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
+      continue;
+    }
+    try {
+      rebased = setExistingRoleDescriptions(rebased, newModel, roleCode, descriptions);
     } catch {
       conflicts.push({ kind: "role", ownerCode: roleCode, code: roleCode });
     }

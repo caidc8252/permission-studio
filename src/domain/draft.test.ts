@@ -13,6 +13,7 @@ import {
   renameExistingRole,
   setContractOwnerMembership,
   setExistingRoleNames,
+  setExistingRoleDescriptions,
   setRolePermissionMembership,
   updateNewRole,
   toggleContractOwner,
@@ -156,6 +157,51 @@ describe("permission drafts", () => {
     ]);
     expect(change.roleChanges).toEqual([
       { roleCode: "preset_ops", roleNameKey: "role.ops", names, add: [], remove: [] },
+    ]);
+  });
+
+  it("updates existing role descriptions in the preview and change protocol", () => {
+    const descriptions = {
+      en: "Manages daily operations.",
+      "zh-CN": "管理日常运营。",
+      ja: "日々の運用を管理します。",
+    };
+    const draft = setExistingRoleDescriptions(
+      createEmptyDraft(),
+      model,
+      "preset_ops",
+      descriptions,
+    );
+    const projected = applyDraftToModel(model, draft);
+    const impact = buildImpactDiff(model, draft);
+    const change = buildPermissionChange(model, draft, {
+      requestId: "01J5ZZZZZZZZZZZZZZZZZZZZZZ",
+      title: "chore(permissions): update operations role",
+      reason: "更新运营角色的中文、英文和日文描述",
+    });
+
+    expect(projected.translations.en["role.opsDesc"]).toBe("Manages daily operations.");
+    expect(projected.translations["zh-CN"]["role.opsDesc"]).toBe("管理日常运营。");
+    expect(projected.translations.ja["role.opsDesc"]).toBe("日々の運用を管理します。");
+    expect(impact.updatedRoleDescriptions).toEqual([
+      {
+        roleCode: "preset_ops",
+        oldDescriptions: {
+          en: "Operations role.",
+          "zh-CN": "运营角色。",
+          ja: "運用ロール。",
+        },
+        newDescriptions: descriptions,
+      },
+    ]);
+    expect(change.roleChanges).toEqual([
+      {
+        roleCode: "preset_ops",
+        roleDescriptionKey: "role.opsDesc",
+        descriptions,
+        add: [],
+        remove: [],
+      },
     ]);
   });
 

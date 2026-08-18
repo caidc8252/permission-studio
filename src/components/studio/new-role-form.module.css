@@ -230,7 +230,7 @@
 }
 
 .compactBody {
-  overflow: visible;
+  overflow-y: auto;
 }
 
 .existingRoleFields {
@@ -257,6 +257,7 @@
 
 .compactField {
   display: grid;
+  align-content: start;
   gap: 8px;
   color: var(--text, #172033);
   font-size: 0.82rem;
@@ -272,7 +273,22 @@
   background: var(--surface, #ffffff);
 }
 
-.compactField input[aria-invalid="true"] {
+.compactField textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 9px 11px;
+  resize: vertical;
+  color: inherit;
+  border: 1px solid var(--surface-border, #d7e0ec);
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.compactField input[aria-invalid="true"],
+.compactField textarea[aria-invalid="true"] {
   border-color: var(--danger, #b42318);
 }
 
@@ -284,6 +300,10 @@
 
 .compactField small[role="alert"] {
   color: var(--danger, #b42318);
+}
+
+.compactField .translationSuccess {
+  color: #15803d;
 }
 
 @media (min-width: 901px) {

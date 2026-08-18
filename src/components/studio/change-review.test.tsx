@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -239,5 +239,32 @@ describe("ChangeReview", () => {
     expect(screen.getByText("将删除角色定义以及中文、英文、日文资源。")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "撤销角色 运营 的全部变更" }));
     expect(onDraftChange).toHaveBeenCalledWith(createEmptyDraft());
+  });
+
+  it("highlights localized name and description changes for an existing role", () => {
+    const draft: PermissionDraft = {
+      ...createEmptyDraft(),
+      roleNames: {
+        preset_ops: { en: "Operations Admin", "zh-CN": "运营管理员", ja: "運用管理者" },
+      },
+      roleDescriptions: {
+        preset_ops: {
+          en: "Manages daily operations.",
+          "zh-CN": "管理日常运营。",
+          ja: "運用管理者の日常業務を管理します。",
+        },
+      },
+    };
+
+    render(<ChangeReview model={model} draft={draft} onDraftChange={vi.fn()} />);
+
+    const changes = screen.getByRole("region", { name: "运营管理员的字段修改" });
+    expect(within(changes).getByRole("heading", { name: /字段修改\s*2 项/u })).toBeVisible();
+    expect(within(changes).getByText("角色名称")).toBeVisible();
+    expect(within(changes).getByText("角色描述")).toBeVisible();
+    expect(within(changes).getByText("运营")).toHaveRole("deletion");
+    expect(within(changes).getByText("运营管理员")).toBeVisible();
+    expect(within(changes).getByText("运营角色。")).toHaveRole("deletion");
+    expect(within(changes).getByText("管理日常运营。")).toBeVisible();
   });
 });

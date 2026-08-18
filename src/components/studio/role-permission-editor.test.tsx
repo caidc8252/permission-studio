@@ -374,6 +374,74 @@ describe("RolePermissionEditor", () => {
     });
   });
 
+  it("edits and translates localized names and descriptions for an existing role", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn();
+    const fetcher = vi.fn(async (request: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { text: string };
+      return Response.json(
+        body.text === "运营"
+          ? { data: { en: "Operations Admin", ja: "運用管理" } }
+          : { data: { en: "Manages daily operations.", ja: "日々の運用を管理します。" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetcher);
+    render(
+      <RolePermissionEditor
+        model={model}
+        draft={createEmptyDraft()}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "角色操作：运营" }));
+    await user.click(screen.getByRole("menuitem", { name: "编辑角色" }));
+    const dialog = screen.getByRole("dialog", { name: "编辑角色" });
+    expect(within(dialog).getByRole("textbox", { name: "角色中文描述" })).toHaveValue("运营角色。");
+
+    await user.click(within(dialog).getByRole("button", { name: "将中文名称翻译为英文和日文" }));
+    const chineseDescription = within(dialog).getByRole("textbox", { name: "角色中文描述" });
+    await user.clear(chineseDescription);
+    await user.type(chineseDescription, "管理日常运营。");
+    await user.click(within(dialog).getByRole("button", { name: "将中文描述翻译为英文和日文" }));
+
+    expect(within(dialog).getByRole("textbox", { name: "角色英文名称" })).toHaveValue(
+      "Operations Admin",
+    );
+    expect(within(dialog).getByRole("textbox", { name: "角色日文名称" })).toHaveValue("運用管理");
+    expect(within(dialog).getByRole("textbox", { name: "角色英文描述" })).toHaveValue(
+      "Manages daily operations.",
+    );
+    expect(within(dialog).getByRole("textbox", { name: "角色日文描述" })).toHaveValue(
+      "日々の運用を管理します。",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "保存角色修改" }));
+
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...createEmptyDraft(),
+      roleNames: {
+        preset_ops: { en: "Operations Admin", "zh-CN": "运营", ja: "運用管理" },
+      },
+      roleDescriptions: {
+        preset_ops: {
+          en: "Manages daily operations.",
+          "zh-CN": "管理日常运营。",
+          ja: "日々の運用を管理します。",
+        },
+      },
+    });
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/translate-role-name", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "运营" }),
+    });
+    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/translate-role-name", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "管理日常运营。" }),
+    });
+  });
+
   it("falls back to an existing role when the selected new role is discarded", () => {
     const draft = addNewRole(createEmptyDraft(), model, {
       roleId: 99,

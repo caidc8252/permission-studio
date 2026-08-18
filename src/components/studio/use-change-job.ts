@@ -18,6 +18,8 @@ export interface PrepareIntent {
     newRoleCode?: string;
     roleNameKey?: string;
     names?: { en: string; "zh-CN": string; ja: string };
+    roleDescriptionKey?: string;
+    descriptions?: { en: string; "zh-CN": string; ja: string };
     add: string[];
     remove: string[];
   }>;

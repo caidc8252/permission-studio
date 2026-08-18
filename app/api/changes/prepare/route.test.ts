@@ -205,6 +205,36 @@ describe("POST /api/changes/prepare", () => {
     ).toBe(400);
   });
 
+  it("accepts existing-role descriptions and rejects the wrong description key", async () => {
+    const { handler, prepareChange } = setup();
+    const describedRole = {
+      roleCode: "preset_ops",
+      roleDescriptionKey: "role.opsDesc",
+      descriptions: {
+        en: "Manages daily operations.",
+        "zh-CN": "管理日常运营。",
+        ja: "日々の運用を管理します。",
+      },
+      add: [],
+      remove: [],
+    };
+
+    expect((await handler(request({ ...intent, roleChanges: [describedRole] }))).status).toBe(202);
+    expect(prepareChange).toHaveBeenCalledWith(
+      expect.objectContaining({ roleChanges: [describedRole] }),
+    );
+    expect(
+      (
+        await handler(
+          request({
+            ...intent,
+            roleChanges: [{ ...describedRole, roleDescriptionKey: "role.wrongDesc" }],
+          }),
+        )
+      ).status,
+    ).toBe(400);
+  });
+
   it("accepts deletion of an existing preset role and rejects unknown roles", async () => {
     const { handler, prepareChange } = setup();
 

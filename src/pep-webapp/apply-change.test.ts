@@ -179,6 +179,46 @@ describe("applyPermissionChange", () => {
     }
   });
 
+  it("updates all existing-role locale descriptions atomically and idempotently", async () => {
+    const { root, catalog } = targetFixture();
+    const change = {
+      newRoles: [],
+      roleChanges: [
+        {
+          roleCode: "preset_ops",
+          roleDescriptionKey: "role.presetOpsDesc",
+          descriptions: {
+            en: "Manages daily operations.",
+            "zh-CN": "管理日常运营。",
+            ja: "日々の運用を管理します。",
+          },
+          add: [],
+          remove: [],
+        },
+      ],
+      contractChanges: [],
+    };
+
+    const first = await applyPermissionChange(root, change);
+    const second = await applyPermissionChange(root, change);
+
+    expect(first.touchedFiles).toEqual([
+      "apps/web/manifest/catalog/i18n/en.ts",
+      "apps/web/manifest/catalog/i18n/zh-CN.ts",
+      "apps/web/manifest/catalog/i18n/ja.ts",
+    ]);
+    expect(second.touchedFiles).toEqual([]);
+    for (const [locale, description] of [
+      ["en", "Manages daily operations."],
+      ["zh-CN", "管理日常运营。"],
+      ["ja", "日々の運用を管理します。"],
+    ]) {
+      expect(readFileSync(join(catalog, "i18n", `${locale}.ts`), "utf8")).toContain(
+        `presetOpsDesc: "${description}"`,
+      );
+    }
+  });
+
   it("deletes a role and all locale entries atomically and idempotently", async () => {
     const { root, catalog } = targetFixture();
     const change = {

@@ -112,6 +112,8 @@ export function RolePermissionEditor({
             impact.addedRoles.filter((item) => item.code === role.code).length +
             impact.renamedRoles.filter((item) => item.oldCode === sourceCode).length +
             impact.updatedRoleNames.filter((item) => item.roleCode === sourceCode).length +
+            (impact.updatedRoleDescriptions ?? []).filter((item) => item.roleCode === sourceCode)
+              .length +
             impact.addedRolePermissions.filter((item) => item.roleCode === sourceCode).length +
             impact.removedRolePermissions.filter((item) => item.roleCode === sourceCode).length
           );

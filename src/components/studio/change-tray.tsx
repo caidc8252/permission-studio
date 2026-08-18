@@ -26,6 +26,7 @@ function countScenario(impact: ImpactDiff, scenario: string): number {
       (impact.deletedRoleCodes ?? []).filter((roleCode) => roleCode === sourceCode).length +
       (rename ? 1 : 0) +
       impact.updatedRoleNames.filter((item) => item.roleCode === sourceCode).length +
+      (impact.updatedRoleDescriptions ?? []).filter((item) => item.roleCode === sourceCode).length +
       [...impact.addedRolePermissions, ...impact.removedRolePermissions].filter(
         (item) => item.roleCode === sourceCode,
       ).length
@@ -57,7 +58,10 @@ export function ChangeTray({
     (impact.deletedRoleCodes?.length ?? 0) +
     impact.removedRolePermissions.length +
     impact.removedContractOwners.length;
-  const modifications = impact.renamedRoles.length + impact.updatedRoleNames.length;
+  const modifications =
+    impact.renamedRoles.length +
+    impact.updatedRoleNames.length +
+    (impact.updatedRoleDescriptions?.length ?? 0);
   const total = additions + removals + modifications;
   if (!total) return null;
 

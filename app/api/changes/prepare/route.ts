@@ -5,6 +5,7 @@ import type { PermissionStudioModel } from "@/src/domain/model";
 import {
   normalizeNewRole,
   validateRoleNames,
+  validateRoleDescriptions,
   type NewRoleDraft,
   type NewRoleNames,
 } from "@/src/domain/new-role";
@@ -24,6 +25,11 @@ const roleNamesSchema = z.strictObject({
   "zh-CN": z.string().min(1).max(100),
   ja: z.string().min(1).max(100),
 });
+const roleDescriptionsSchema = z.strictObject({
+  en: z.string().min(1).max(500),
+  "zh-CN": z.string().min(1).max(500),
+  ja: z.string().min(1).max(500),
+});
 const prepareIntentSchema = z.strictObject({
   baseSha: z
     .string()
@@ -37,13 +43,7 @@ const prepareIntentSchema = z.strictObject({
         roleId: z.number().int().min(1).max(999),
         code: z.string().min(1).max(200),
         names: roleNamesSchema,
-        descriptions: z
-          .strictObject({
-            en: z.string().min(1).max(500),
-            "zh-CN": z.string().min(1).max(500),
-            ja: z.string().min(1).max(500),
-          })
-          .optional(),
+        descriptions: roleDescriptionsSchema.optional(),
         permissionCodes: z.array(z.string().min(1).max(200)).max(2_000),
       }),
     )
@@ -56,6 +56,8 @@ const prepareIntentSchema = z.strictObject({
         newRoleCode: z.string().min(1).max(200).optional(),
         roleNameKey: z.string().min(1).max(200).optional(),
         names: roleNamesSchema.optional(),
+        roleDescriptionKey: z.string().min(1).max(200).optional(),
+        descriptions: roleDescriptionsSchema.optional(),
         ...listChangeSchema.shape,
       }),
     )
@@ -127,6 +129,14 @@ function validateReferences(model: PermissionStudioModel, change: PermissionChan
       );
       if (Object.keys(errors).length) throw new Error("invalid role names");
       acceptedChangedNames.push(role.names);
+    }
+    if (role.descriptions) {
+      if (role.roleDescriptionKey !== modelRole.remark) {
+        throw new Error("unknown role description key");
+      }
+      if (Object.keys(validateRoleDescriptions(role.descriptions)).length) {
+        throw new Error("invalid role descriptions");
+      }
     }
   }
   for (const contract of change.contractChanges) {
